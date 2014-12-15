@@ -1,0 +1,187 @@
+%   Copyright (C) 2014 Reinventing Geospatial, Inc
+%
+%   This program is free software: you can redistribute it and/or modify
+%   it under the terms of the GNU General Public License as published by
+%   the Free Software Foundation, either version 3 of the License, or
+%   (at your option) any later version.
+%
+%   This program is distributed in the hope that it will be useful,
+%   but WITHOUT ANY WARRANTY; without even the implied warranty of
+%   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%   GNU General Public License for more details.
+%
+%   You should have received a copy of the GNU General Public License
+%   along with this program.  If not, see <http://www.gnu.org/licenses/>,
+%   or write to the Free Software Foundation, Inc., 59 Temple Place -
+%   Suite 330, Boston, MA 02111-1307, USA.
+
+\documentclass{article}
+\usepackage{multirow}
+\usepackage[margin=1in]{geometry}
+\usepackage[hidelinks]{hyperref}
+\usepackage{listings}
+\usepackage{courier}
+\usepackage{fancyhdr}
+
+\lstset{basicstyle=\ttfamily}
+
+\pagestyle{fancy}
+\lhead{US Army Corps Engineering Research \& Development Center}
+\rhead{Geospatial Research Laboratory}
+\rfoot{Version Number: 1.0}
+
+\title{Instructions For gdal2tiles\_parallel.py}
+\author{Steven D. Lander, Reinventing Geospatial}
+
+\begin{document}
+\maketitle
+
+\section{Purpose}
+This document covers installation of dependencies, in-depth explanations of
+command-line arguments, and usage examples for gdal2tiles\_parallel.py.
+
+The file gdal2tiles\_parallel.py is a Python script that converts
+GDAL-supported raster imagery files into a folder of tiles in TMS format
+(z/x/y).  This version improves upon the standard gdal2tiles.py file included
+with GDAL by adding multiprocessing improvements to obtain even better tile
+generation performance.
+
+\section{Installing Dependencies}
+Gdal2tiles\_parallel.py was written for Python 2.7.x and has not been tested on
+any other version.  It will run on either 32 or 64 bit systems with no issues.
+
+The script relies on Python 2.7.x, GDAL core, and the GDAL Python bindings.
+Some imagery formats such as MrSID will require additional driver installers to
+work correctly.
+\subsection{Windows}
+In order to run gdal2tiles\_parallel.py on a Windows environment, install
+the following packages.  For convenience, they have been included in all
+PythonGeopackage releases and are viewable in source under Dependencies.
+\begin{itemize}
+    \item
+        The latest version of Python 2.7 for either x86 (32 bit) or x86\_64
+        (64 bit): 
+        \url{https://www.python.org/downloads/windows/}.
+    \item
+        The lastest stable release of the Geospatial Data Abstraction Library
+        (GDAL) in either x86 (32 bit) or x86\_64 (64 bit):
+        \url{http://www.gisinternals.com/sdk}
+\end{itemize}
+\subsection{Linux}
+In order to run gdal2tiles\_parallel.py on a Linux environment, instructions
+will differ slightly by distribution.  Most newer Linux distributions have
+Python 2.7 as either an option or the default python version in their package
+repository, but others such as CentOS only have older versions.  In that case,
+the user will need to find out how to get Python 2.7 from a reputable source or
+compile it themselves.  The following packages are needed:
+\begin{itemize}
+    \item 
+        The latest version of Python 2.7 for your system.  For Debian-based
+        distributions such as Ubuntu and RedHat type the following into a
+        command line: 
+
+        \lstinline|sudo apt-get install python2.7 python2.7-dev  python-pip base-devel| 
+
+        This will install the Python 2.7 environment plus PIP, a Python
+        module manager.
+    \item
+        The latest GDAL binaries and python bindings for your system.  For
+        Debian-based distributions such as Ubuntu and RedHat, type the
+        following into a command line:
+
+        \lstinline|sudo apt-get install gdal-bin python-gdal|
+\end{itemize}
+\section{Usage}
+\subsection{Command Line Arguments}
+Gdal2tiles\_parallel.py supports additional functionality via command line
+arguments provided to the script at the time it is executed.  Following is a
+outline of the important flags:
+\\\\
+\begin{tabular}{ | c | p{14cm} | }
+    \hline
+    -h, --help & Print the listing of commands available for the script.\\
+    \hline
+    -p, --profile & Specify the tiling profile you would like these tiles to be
+    created in.  Valid options are mercator or geodetic.\\
+    \hline
+    -e, --resume & Instruct the script to not overwrite tiles that have already
+    been created.  This is a {\bf mandatory} flag when using default
+    multiprocessing.\\
+    \hline
+    -z, --zoom & The zoom levels to create.  Allows the tiler to make tiles
+    past the default zoom level that GDAL detects.  (Format: '2-5' or '10')
+    \\
+    \hline
+    -a, --srcnodata & Specify the RGB value that gdal2tiles should convert to
+    transparency.  Typical value should be '0,0,0'.
+    \\
+    \hline
+\end{tabular}
+
+\subsection{Examples}
+\begin{itemize}
+    \item
+        Create a folder of tiles in the mercator projection based on a GeoTiff
+        image named WhiteHorse.tif and name the folder 'WhiteHorse\_tiles':\\
+        \\
+        \lstinline|python gdal2tiles_parallel.py|\\
+        \lstinline|    -p mercator -e|\\
+        \lstinline|    /data/raw/WhiteHorse.tif /data/tiles/mercator/WhiteHorse_tiles|\\
+    \item
+        Create a folder of tiles for zoom level 15 in the mercator projection
+        based on a GeoTiff image named WhiteHorse.tif and name the folder
+        'WhiteHorse\_tiles':\\
+        \\
+        \lstinline|python gdal2tiles_parallel.py|\\
+        \lstinline|    -p mercator -e -z 15|\\
+        \lstinline|    /data/raw/WhiteHorse.tif /data/tiles/mercator/WhiteHorse_tiles|\\
+    \item
+        Create a folder of tiles in the geodetic projection based on a MrSID
+        image named FortBelvoir\_201307\_A6.sid and name the folder
+        belvoir\_tiles. Also, assigns the NODATA transparency to the RGB color
+        value of 0,0,0:\\
+        \\
+        \lstinline|python gdal2tiles_parallel.py|\\
+        \lstinline|    -p geodetic -e -a 0,0,0|\\
+        \lstinline|    /data/raw/FortBelvoir_201307_A6.sid /data/tiles/belvoir_tiles|
+    \item
+        Create a folder of tiles in the geodetic projection based on a MrSID
+        image named FortBelvoir\_201307\_A6.sid and name the folder
+        belvoir\_tiles. Also, assigns the NODATA transparency to the RGB color
+        value of 255,0,0:\\
+        \\
+        \lstinline|python gdal2tiles_parallel.py|\\
+        \lstinline|    -p geodetic -e -a 255,0,0|\\
+        \lstinline|    /data/raw/FortBelvoir_201307_A6.sid /data/tiles/belvoir_tiles|
+    \item
+        Create a folder of tiles for zoom levels 10 through 13 in the geodetic
+        projection based on a MrSID image named FortBelvoir\_201307\_A6.sid
+        and name the folder belvoir\_tiles. Also, assigns the NODATA
+        transparency to the RGB color value of 0,0,0:\\
+        \\
+        \lstinline|python gdal2tiles_parallel.py|\\
+        \lstinline|    -p geodetic -e -a 0,0,0|\\
+        \lstinline|    -z 10-13|\\
+        \lstinline|    /data/raw/FortBelvoir_201307_A6.sid /data/tiles/belvoir_tiles|
+\end{itemize}
+
+\section{Caveats \& Known Issues}
+\begin{itemize}
+    \item
+        Gdal2tiles\_parallel.py currently only outputs tiles as full-color
+        PNGs.  This is so that transparency can be preserved.  When used in
+        conjunction with tiles2gpkg\_parallel.py a user can make a geopackage
+        with either PNGs, JPEGs, or a mixture of both.
+    \item
+        Since this script utilizes multiprocessing, it does not exit cleanly
+        when interrupted.  For example, if Ctrl+D (KeyboardInterrupt) while the
+        script is executing, it will not completely stop but instead produce
+        profuse error messages.  To kill the process, close the terminal
+        windows on Windows or, on Linux, send the process to the background
+        (Ctrl+Z) then kill the job with \lstinline|kill -9 $(jobs -p)|.
+    \item
+        Gdal2tiles\_parallel.py only creates tiles with a lower-left tile
+        origin.
+\end{itemize}
+
+\end{document}
