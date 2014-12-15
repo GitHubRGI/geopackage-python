@@ -11,6 +11,11 @@ Requirements
 
 Usage
 -----
+[See also PDF documentation
+here.](https://github.com/GitHubRGI/geopackage-python/raw/master/Documentation/release/Instructions_For_tiles2gpkg.pdf)
+
+Testing
+-------
 
 Known Issues
 ------------
