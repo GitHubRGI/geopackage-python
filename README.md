@@ -25,6 +25,8 @@ Using PIP from the command line (Windows or Linux):
 
 To run the test suite, copy tiles2gpkg_parallel.py into the Testing folder and
 then run:
+
+.. code-block:: console
     py.test test_tiles2gpkg.py
 
 Known Issues
