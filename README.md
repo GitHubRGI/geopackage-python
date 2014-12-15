@@ -16,6 +16,16 @@ here.](https://github.com/GitHubRGI/geopackage-python/raw/master/Documentation/r
 
 Testing
 -------
+To run the test suite for tiles2gpkg_parallel.py, you will need pytest for
+python 2.7. For detailed information on how to install or set up pytest, see
+the [official documentation.](http://pytest.org/latest/getting-started.html)
+
+Using PIP from the command line (Windows or Linux):
+    pip install -U pytest
+
+To run the test suite, copy tiles2gpkg_parallel.py into the Testing folder and
+then run:
+    py.test test_tiles2gpkg.py
 
 Known Issues
 ------------
