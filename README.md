@@ -7,10 +7,10 @@ Repository for python-based tools for creating OGC GeoPackages.
 Consortium](http://opengeospatial.org/standards/geopackage)
 
 Requirements
-============
+------------
 
 Usage
-=====
+-----
 
 Known Issues
-============
+------------
