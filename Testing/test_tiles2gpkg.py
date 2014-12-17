@@ -42,7 +42,7 @@ from sqlite3 import ProgrammingError
 from sqlite3 import OperationalError
 from tempfile import gettempdir
 from PIL.Image import new
-from PIL.Image import open as iopen
+from PIL.Image import open as iopen 
 from tiles2gpkg_parallel import Mercator
 from tiles2gpkg_parallel import Geodetic
 from tiles2gpkg_parallel import EllipsoidalMercator
@@ -52,8 +52,8 @@ from tiles2gpkg_parallel import Geopackage
 from tiles2gpkg_parallel import img_to_buf
 from tiles2gpkg_parallel import TempDB
 from tiles2gpkg_parallel import img_has_transparency
-from tiles2gpkg_parallel import file_count
 from tiles2gpkg_parallel import split_all
+from tiles2gpkg_parallel import file_count
 from tiles2gpkg_parallel import worker_map
 from tiles2gpkg_parallel import sqlite_worker
 from tiles2gpkg_parallel import allocate
@@ -121,7 +121,7 @@ class TestMercator:
         y = 9870
         lat, lon = Mercator.tile_to_lat_lon(z, x, y)
         assert lon == 68.994140625 and \
-            lat == 34.56085936708385
+            lat == 34.56085936708384
 
     def test_tile_to_lat_lon_four(self):
         z = 14
@@ -473,13 +473,18 @@ class Testgeopackage:
             FROM gpkg_tile_matrix
             WHERE zoom_level is ?;
         """
+        test_tile_row_count_stmt = """
+             SELECT COUNT (tile_row) FROM 
+             (SELECT DISTINCT tile_row FROM tiles
+              WHERE zoom_level = ?)
+        """
         gpkg = make_gpkg()
         gpkg.update_metadata(make_zmd_list_geodetic())
         for zoom in xrange(2, 6):
             (result,) = gpkg.execute(test_width_stmt, (zoom,))
-            width = (2**zoom)
-            if (result[0] != width):
-                print zoom, result[0], (2**zoom)
+            (width,) = gpkg.execute(test_tile_row_count_stmt, (zoom,))
+            if (result[0] != width[0]):
+                print zoom, result[0], width[0]
                 assert False
         assert True
 
@@ -489,13 +494,18 @@ class Testgeopackage:
             FROM gpkg_tile_matrix
             WHERE zoom_level is ?;
         """
+        test_tile_column_count_stmt = """
+             SELECT COUNT (tile_column) FROM 
+             (SELECT DISTINCT tile_column FROM tiles
+              WHERE zoom_level = ?)
+        """
         gpkg = make_gpkg()
         gpkg.update_metadata(make_zmd_list_geodetic())
         for zoom in xrange(2, 6):
             (result,) = gpkg.execute(test_height_stmt, (zoom,))
-            height = (2**(zoom-1))
-            if (result[0] != height):
-                print zoom, result[0], (2**(zoom-1))
+            (height,) = gpkg.execute(test_tile_column_count_stmt, (zoom,))
+            if (result[0] != height[0]):
+                print zoom, result[0], height[0]
                 assert False
             assert True
         
