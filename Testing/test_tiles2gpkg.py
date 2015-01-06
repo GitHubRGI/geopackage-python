@@ -37,12 +37,16 @@ from math import pi
 from uuid import uuid4
 from random import randint
 from os.path import join
+from os.path import abspath
 from sqlite3 import Binary
 from sqlite3 import ProgrammingError
 from sqlite3 import OperationalError
 from tempfile import gettempdir
 from PIL.Image import new
 from PIL.Image import open as iopen 
+
+from sys import path
+path.append(abspath("../Packaging"))
 from tiles2gpkg_parallel import Mercator
 from tiles2gpkg_parallel import Geodetic
 from tiles2gpkg_parallel import EllipsoidalMercator
