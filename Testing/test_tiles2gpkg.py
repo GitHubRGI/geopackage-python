@@ -66,10 +66,9 @@ from tiles2gpkg_parallel import combine_worker_dbs
 from tiles2gpkg_parallel import main
 
 GEODETIC_FILE_PATH = join(getcwd(), "rgb_tiles", "geodetic")
-MERCATOR_FILE_PATH = join(getcwd(), "rgb_tiles", "mercator")
+MERCATOR_FILE_PATH = join(getcwd(), "Testing", "rgb_tiles", "mercator")
 
 # testing commands:
-# cd repositories\erdc-tec-research\Python\Tiles2Gpkg
 # py.test --cov-report term-missing --cov tiles2gpkg_parallel test_tiles2gpkg.py
 
 class TestMercator:
@@ -118,14 +117,12 @@ class TestMercator:
         x = y = 1
         lat, lon = Mercator.tile_to_lat_lon(z, x, y)
         assert lon == 180.0 and lat == 85.0511287798066
-
-    def test_tile_to_lat_lon_three(self):
         z = 14
         x = 11332
         y = 9870
         lat, lon = Mercator.tile_to_lat_lon(z, x, y)
         assert lon == 68.994140625 and \
-            lat == 34.56085936708384
+            lat == 34.56085936708385
 
     def test_tile_to_lat_lon_four(self):
         z = 14
