@@ -2,10 +2,10 @@ language: python
 python:
     - "2.7"
 install:
-    - pip install -r dependencies.txt --use-mirrors
+    - pip install -r dependencies.txt
     - pip install coveralls
 script:
-    - python -m pytest Testing/test_tiles2gpkg.py
+    - py.test Testing/test_tiles2gpkg.py --doctest-modules -v --cov Packaging --cov-report term-missing
 after_success:
     - coverage run --source=Packaging Testing/test_tiles2gpkg.py
     - coverage report -m

@@ -1,2 +1,3 @@
 Pillow
 pytest
+pytest-cov
