@@ -7,6 +7,6 @@ install:
 script:
     - python -m pytest Testing/test_tiles2gpkg.py
 after_success:
-    - coverage run Testing/test_tiles2gpkg.py
+    - coverage run --source=Packaging Testing/test_tiles2gpkg.py
     - coverage report -m
     - coveralls --verbose
