@@ -1,0 +1,5 @@
+language: python
+python:
+    - "2.7"
+install: pip install -r dependencies.txt --use-mirrors
+script: python -m pytest 
