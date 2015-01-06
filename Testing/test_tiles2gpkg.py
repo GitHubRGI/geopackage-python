@@ -46,7 +46,7 @@ from PIL.Image import new
 from PIL.Image import open as iopen 
 
 from sys import path
-path.append(abspath("../Packaging"))
+path.append(abspath("Packaging"))
 from tiles2gpkg_parallel import Mercator
 from tiles2gpkg_parallel import Geodetic
 from tiles2gpkg_parallel import EllipsoidalMercator
