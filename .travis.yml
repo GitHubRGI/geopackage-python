@@ -7,6 +7,4 @@ install:
 script:
     - py.test Testing/test_tiles2gpkg.py --doctest-modules -v --cov Packaging --cov-report term-missing
 after_success:
-    - coverage run --source=Packaging Testing/test_tiles2gpkg.py
-    - coverage report -m
-    - coveralls --verbose
+    - coveralls
