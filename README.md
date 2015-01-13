@@ -1,5 +1,3 @@
-[![Stories in Ready](https://badge.waffle.io/GitHubRGI/geopackage-python.png?label=ready&title=Ready)](https://waffle.io/GitHubRGI/geopackage-python)
-geopackage-python : Python-based tools for creating OGC GeoPackages.
 =================
 
 [GeoPackage Specification from the Open Geospatial
@@ -7,6 +5,8 @@ Consortium](http://opengeospatial.org/standards/geopackage)
 
 [![Build Status](https://travis-ci.org/GitHubRGI/geopackage-python.svg?branch=master)](https://travis-ci.org/GitHubRGI/geopackage-python)
 [![Coverage Status](https://img.shields.io/coveralls/GitHubRGI/geopackage-python.svg)](https://coveralls.io/r/GitHubRGI/geopackage-python)
+[![Stories in Ready](https://badge.waffle.io/GitHubRGI/geopackage-python.png?label=ready&title=Ready)](https://waffle.io/GitHubRGI/geopackage-python)
+geopackage-python : Python-based tools for creating OGC GeoPackages.
 
 ### Table Of Contents
 
