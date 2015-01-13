@@ -18,3 +18,7 @@ Consortium](http://opengeospatial.org/standards/geopackage)
   tiles2gpkg_parallel.py](https://github.com/GitHubRGI/geopackage-python/wiki/Usage-Instructions-for-tiles2gpkg_parallel.py)
 * [Running unit tests on
   tiles2gpkg_parallel.py](https://github.com/GitHubRGI/geopackage-python/wiki/Running-Unit-Tests-On-tiles2gpkg_parallel.py)
+
+### Download stable versions
+
+* [Release 2.0 - 2014-01-13](https://github.com/GitHubRGI/geopackage-python/archive/geopackage-python_release2.0.zip)
