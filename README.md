@@ -21,4 +21,4 @@ Consortium](http://opengeospatial.org/standards/geopackage)
 
 ### Download stable versions
 
-* [Release 2.0 - 2014-01-13](https://github.com/GitHubRGI/geopackage-python/archive/geopackage-python_release2.0.zip)
+* [Release 2.0 - Archived on 2014-01-13](https://github.com/GitHubRGI/geopackage-python/archive/geopackage-python_release2.0.zip)
