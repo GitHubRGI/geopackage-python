@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/GitHubRGI/geopackage-python.png?label=ready&title=Ready)](https://waffle.io/GitHubRGI/geopackage-python)
 geopackage-python : Python-based tools for creating OGC GeoPackages.
 =================
 
