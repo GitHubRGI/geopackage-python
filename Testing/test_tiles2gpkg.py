@@ -43,7 +43,7 @@ from sqlite3 import ProgrammingError
 from sqlite3 import OperationalError
 from tempfile import gettempdir
 from PIL.Image import new
-from PIL.Image import open as iopen 
+from PIL.Image import open as iopen
 
 from sys import path
 path.append(abspath("Packaging"))
@@ -447,7 +447,7 @@ class Testgeopackage:
         assert (result.fetchone())[0] == 0
 
     def test_execute_with_inputs(self):
-        gpkg = make_gpkg() 
+        gpkg = make_gpkg()
         test_statement = """
             UPDATE gpkg_contents SET
                 min_x = ?,
@@ -484,7 +484,7 @@ class Testgeopackage:
         for zoom in xrange(2, 6):
             (result,) = gpkg.execute(test_width_stmt, (zoom,))
             (width,) = gpkg.execute(test_tile_row_count_stmt, (zoom,))
-            if (result[0] != width[0]):
+            if result[0] != width[0]:
                 print zoom, result[0], width[0]
                 assert False
         assert True
@@ -505,11 +505,11 @@ class Testgeopackage:
         for zoom in xrange(2, 6):
             (result,) = gpkg.execute(test_height_stmt, (zoom,))
             (height,) = gpkg.execute(test_tile_column_count_stmt, (zoom,))
-            if (result[0] != height[0]):
+            if result[0] != height[0]:
                 print zoom, result[0], height[0]
                 assert False
             assert True
-        
+
 class TestTempDB:
     def __make_tempDB(self):
         chdir(gettempdir())
@@ -615,9 +615,9 @@ class testsqliteworker:
     def test_sqlite_worker_4326(self):
         session_folder = make_session_folder()
         file_list = make_geodetic_filelist()
-        metadata = build_lut(file_list, true, 4326)
+        metadata = build_lut(file_list, True, 4326)
         extra_args = dict(root_dir=session_folder, tile_info=metadata,
-                          lower_left=true, srs=4326, imagery='mixed',
+                          lower_left=True, srs=4326, imagery='mixed',
                           jpeg_quality=75)
         sqlite_worker(file_list, extra_args)
         # assert that worker put the .gpkg.part file into base_dir
@@ -627,9 +627,9 @@ class testsqliteworker:
     def test_sqlite_worker_3857(self):
         session_folder = make_session_folder()
         file_list = make_geodetic_filelist()
-        metadata = build_lut(file_list, true, 3857)
+        metadata = build_lut(file_list, True, 3857)
         extra_args = dict(root_dir=session_folder, tile_info=metadata,
-                          lower_left=true, srs=3857, imagery='mixed',
+                          lower_left=True, srs=3857, imagery='mixed',
                           jpeg_quality=75)
         sqlite_worker(file_list, extra_args)
         files = listdir(session_folder)
@@ -638,9 +638,9 @@ class testsqliteworker:
     def test_sqlite_worker_3395(self):
         session_folder = make_session_folder()
         file_list = make_geodetic_filelist()
-        metadata = build_lut(file_list, true, 3395)
+        metadata = build_lut(file_list, True, 3395)
         extra_args = dict(root_dir=session_folder, tile_info=metadata,
-                          lower_left=true, srs=3395, imagery='mixed',
+                          lower_left=True, srs=3395, imagery='mixed',
                           jpeg_quality=75)
         sqlite_worker(file_list, extra_args)
         files = listdir(session_folder)
@@ -649,9 +649,9 @@ class testsqliteworker:
     def test_sqlite_worker_9804(self):
         session_folder = make_session_folder()
         file_list = make_geodetic_filelist()
-        metadata = build_lut(file_list, true, 9804)
+        metadata = build_lut(file_list, True, 9804)
         extra_args = dict(root_dir=session_folder, tile_info=metadata,
-                          lower_left=true, srs=9804, imagery='mixed',
+                          lower_left=True, srs=9804, imagery='mixed',
                           jpeg_quality=75)
         sqlite_worker(file_list, extra_args)
         files = listdir(session_folder)
@@ -660,10 +660,10 @@ class testsqliteworker:
 class testallocate:
     class mockpool:
         def __init__(self):
-            self.works = true
-    
+            self.works = True
+
         def apply_async(self, worker):
-            raise typeerror("success")
+            raise TypeError("success")
 
     def test_allocate_one(self):
         cores = 4
@@ -671,66 +671,66 @@ class testallocate:
         cpu_pool = self.mockpool()
         base_dir = gettempdir()
         extra_args = dict(root_dir=base_dir, tile_info=make_zmd(),
-                          lower_left=true, srs=4326, imagery='mixed')
-        e = none
+                          lower_left=True, srs=4326, imagery='mixed')
+        e = None
         try:
             allocate(cores, cpu_pool, file_list, extra_args)
-        except typeerror as e:
+        except TypeError as e:
             print 'success'
         else:
-            assert e is not none and type(e) == typeerror
+            assert e is not None and type(e) == TypeError
 
 class testbuildlut:
     def test_build_lut_scaled_world_mercator(self):
-        result = build_lut(make_mercator_filelist(), false, 9804)
+        result = build_lut(make_mercator_filelist(), False, 9804)
         assert result[0].zoom == 1
 
     def test_build_lut_ellipsoidal_mercator(self):
-        result = build_lut(make_mercator_filelist(), false, 3395)
+        result = build_lut(make_mercator_filelist(), False, 3395)
         assert result[0].zoom == 1
 
     def test_build_lut_mercator(self):
-        result = build_lut(make_mercator_filelist(), false, 3857)
+        result = build_lut(make_mercator_filelist(), False, 3857)
         assert result[0].zoom == 1
 
     def test_build_lut_upper_left(self):
-        result = build_lut(make_geodetic_filelist(), false, 4326)
+        result = build_lut(make_geodetic_filelist(), False, 4326)
         assert result[1].zoom == 2    
 
     def test_build_lut_one(self):
-        result = build_lut(make_geodetic_filelist(), true, 4326)
+        result = build_lut(make_geodetic_filelist(), True, 4326)
         assert result[1].zoom == 2
 
     def test_build_lut_two(self):
-        result = build_lut(make_geodetic_filelist(), true, 4326)
+        result = build_lut(make_geodetic_filelist(), True, 4326)
         assert result[0].min_tile_col == 0
 
     def test_build_lut_three(self):
-        result = build_lut(make_geodetic_filelist(), true, 4326)
+        result = build_lut(make_geodetic_filelist(), True, 4326)
         assert result[0].min_tile_row == 0
 
     def test_build_lut_four(self):
-        result = build_lut(make_geodetic_filelist(), true, 4326)
+        result = build_lut(make_geodetic_filelist(), True, 4326)
         assert result[0].min_x == -180.0
 
     def test_build_lut_five(self):
-        result = build_lut(make_geodetic_filelist(), true, 4326)
+        result = build_lut(make_geodetic_filelist(), True, 4326)
         assert result[0].min_y == -90.0
 
     def test_build_lut_six(self):
-        result = build_lut(make_geodetic_filelist(), true, 4326)
+        result = build_lut(make_geodetic_filelist(), True, 4326)
         assert result[1].max_tile_row == 1
 
     def test_build_lut_seven(self):
-        result = build_lut(make_geodetic_filelist(), true, 4326)
+        result = build_lut(make_geodetic_filelist(), True, 4326)
         assert result[1].max_tile_col == 1
 
     def test_build_lut_eight(self):
-        result = build_lut(make_geodetic_filelist(), true, 4326)
+        result = build_lut(make_geodetic_filelist(), True, 4326)
         assert result[0].max_x == 0.0
 
     def test_build_lut_nine(self):
-        result = build_lut(make_geodetic_filelist(), true, 4326)
+        result = build_lut(make_geodetic_filelist(), True, 4326)
         assert result[0].max_y == 90.0
 
 def test_combine_worker_dbs():
@@ -763,7 +763,7 @@ def test_main():
     # source = geodetic_file_path
     # output_file = uuid4().hex + ".gpkg"
     # arg_list = parser.parse_args([source, output_file])
-    # main(arg_list) 
+    # main(arg_list)
     assert True
 
 def make_gpkg():
