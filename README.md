@@ -7,6 +7,7 @@ Consortium](http://opengeospatial.org/standards/geopackage)
 [![Build Status](https://travis-ci.org/GitHubRGI/geopackage-python.svg?branch=master)](https://travis-ci.org/GitHubRGI/geopackage-python)
 [![Coverage Status](https://img.shields.io/coveralls/GitHubRGI/geopackage-python.svg)](https://coveralls.io/r/GitHubRGI/geopackage-python)
 [![Stories in Ready](https://badge.waffle.io/GitHubRGI/geopackage-python.png?label=ready&title=Ready)](https://waffle.io/GitHubRGI/geopackage-python)
+[![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/GitHubRGI/geopackage-python/badges/quality-score.png?b=master)(https://scrutinizer-ci.com/g/GitHubRGI/geopackage-python/?b=master)
 
 ### Table Of Contents
 
