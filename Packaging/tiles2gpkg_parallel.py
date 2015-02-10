@@ -348,169 +348,126 @@ class ScaledWorldMercator(EllipsoidalMercator):
         # Instituting a 2 decimal place round to ensure accuracy
         return meters_x, round(meters_y, 2)
 
-class ZoomMetadata(object):
-    """
-    Return an object containing metadata about a given zoom level.
-    """
 
-    def __init__(self):
-        """
-        Constructor
-        """
-        self.__zoom = None
-        self.__min_tile_col = None
-        self.__min_tile_row = None
-        self.__min_x = None
-        self.__min_y = None
-        self.__max_tile_col = None
-        self.__max_tile_row = None
-        self.__max_x = None
-        self.__max_y = None
+class ZoomMetadata(object):
+
+    """Return an object containing metadata about a given zoom level."""
 
     @property
     def zoom(self):
-        """
-        Returns the zoom level of this metadata object.
-        """
+        """Return the zoom level of this metadata object."""
         return self.__zoom
 
     @zoom.setter
     def zoom(self, value):
-        """
-        Sets the zoom level of this metadata object.
-        """
+        """Set the zoom level of this metadata object."""
         self.__zoom = value
 
     @property
     def min_tile_col(self):
-        """
-        Returns the minimum tile column of this metadata object.
-        """
+        """Return the minimum tile column of this metadata object."""
         return self.__min_tile_col
 
     @min_tile_col.setter
     def min_tile_col(self, value):
-        """
-        Sets the minimum tile column of this metadata object.
-        """
+        """Set the minimum tile column of this metadata object."""
         self.__min_tile_col = value
 
     @property
     def max_tile_col(self):
-        """
-        Returns the maximum tile column of this metadata object.
-        """
+        """Return the maximum tile column of this metadata object."""
         return self.__max_tile_col
 
     @max_tile_col.setter
     def max_tile_col(self, value):
-        """
-        Sets the maximum tile column of this metadata object.
-        """
+        """Set the maximum tile column of this metadata object."""
         self.__max_tile_col = value
 
     @property
     def min_tile_row(self):
-        """
-        Returns the minimum tile row of this metadata object.
-        """
+        """Return the minimum tile row of this metadata object."""
         return self.__min_tile_row
 
     @min_tile_row.setter
     def min_tile_row(self, value):
-        """
-        Sets the minimum tile row of this metadata object.
-        """
+        """Set the minimum tile row of this metadata object."""
         self.__min_tile_row = value
 
     @property
     def max_tile_row(self):
-        """
-        Returns the maximum tile row of this metadata object.
-        """
+        """Return the maximum tile row of this metadata object."""
         return self.__max_tile_row
 
     @max_tile_row.setter
     def max_tile_row(self, value):
-        """
-        Sets the maximum tile row of this metadata object.
-        """
+        """Set the maximum tile row of this metadata object."""
         self.__max_tile_row = value
 
     @property
     def min_x(self):
-        """
-        Returns the minimum x coordinate of the bounding box of this tile
-        matrix in the projection-appropriate units of measure.
-        """
+        """Return the minimum x coordinate of the bounding box."""
         return self.__min_x
 
     @min_x.setter
     def min_x(self, value):
-        """
-        Sets the minimum x coordinate of the bounding box of this tile
-        matrix in the projection-appropriate units of measure.
-        """
+        """Set the minimum x coordinate of the bounding box."""
         self.__min_x = value
 
     @property
     def max_x(self):
-        """
-        Returns the maximum x coordinate of the bounding box of this
-        tile matrix in the projection-appropriate units of measure.
-        """
+        """Return the maximum x coordinate of the bounding box."""
         return self.__max_x
 
     @max_x.setter
     def max_x(self, value):
-        """
-        Sets the maximum x coordinate of the bounding box of this tile
-        matrix in the projection-appropriate units of measure.
-        """
+        """Set the maximum x coordinate of the bounding box."""
         self.__max_x = value
 
     @property
     def min_y(self):
-        """
-        Returns the minimum y coordinate of the bounding box of this tile
-        matrix in the projection-appropriate units of measure.
-        """
+        """Return the minimum y coordinate of the bounding box."""
         return self.__min_y
 
     @min_y.setter
     def min_y(self, value):
-        """
-        Sets the minimum y coordinate of the bounding box of this tile
-        matrix in the projection-appropriate units of measure.
-        """
+        """Set the minimum y coordinate of the bounding box."""
         self.__min_y = value
 
     @property
     def max_y(self):
-        """
-        Returns the maximum y coordinate of the bounding box of this tile
-        matrix in the projection-appropriate units of measure.
-        """
+        """Return the maximum y coordinate of the bounding box."""
         return self.__max_y
 
     @max_y.setter
     def max_y(self, value):
-        """
-        Sets the maximum y coordinate of the bounding box of this tile
-        matrix in the projection-appropriate units of measure.
-        """
+        """Set the maximum y coordinate of the bounding box."""
         self.__max_y = value
 
+    @property
+    def matrix_width(self):
+        """Number of tiles wide this matrix should be."""
+        return self.__matrix_width
+
+    @matrix_width.setter
+    def matrix_width(self, value):
+        """Set the number of tiles wide this matrix should be."""
+        self.__matrix_width = value
+
+    @property
+    def matrix_height(self):
+        """Number of tiles high this matrix should be."""
+        return self.__matrix_height
+
+    @matrix_height.setter
+    def matrix_height(self, value):
+        """Set the number of tiles high this matrix should be."""
+        self.__matrix_height = value
+
+
 class Geopackage(object):
-    """
-    Return an object representing a geopackage sqlite database on the
-    file system.
-    """
 
     def __init__(self, file_path, srs):
-        """
-        Constructor
-        """
+        """Constructor."""
         self.__db = connect(file_path)
         self.__srs = srs
         if self.__srs == 3857:
@@ -526,9 +483,7 @@ class Geopackage(object):
         self.close()
 
     def __create_schema(self):
-        """
-        Creates default geopackage schema on the database.
-        """
+        """Create default geopackage schema on the database."""
         self.__db.execute("""
             CREATE TABLE gpkg_contents (
                 table_name TEXT NOT NULL PRIMARY KEY,
@@ -710,27 +665,16 @@ class Geopackage(object):
 
     @property
     def file_path(self):
-        """
-        Returns the path of the geopackage database on the file system.
-        """
+        """Return the path of the geopackage database on the file system."""
         return self.__file_path
 
     @property
     def db(self):
-        """
-        Returns the path of the geopackage database on the file system.
-        """
+        """Return the path of the geopackage database on the file system."""
         return self.__db
 
     def update_metadata(self, metadata):
-        """
-        Updates the metadata of the geopackage database once all tile have
-        been merged into it.
-
-        Inputs:
-        metadata -- a ZoomLevelMetadata object containing all pertinent info
-                    about geopackage tiles
-        """
+        """Update the metadata of the geopackage database after tile merge."""
         # initialize a new projection
         self.open()
         cur = self.__db.cursor()
@@ -746,22 +690,11 @@ class Geopackage(object):
                     pixel_y_size)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?);
         """
-        # iterate through each zoom level object and assign matrix data to table
+        # iterate through each zoom level object and assign
+        # matrix data to table
         for level in metadata:
-            matrix_stmt = """
-                SELECT COUNT({0}) from (
-                    SELECT DISTINCT {0}
-                    FROM {1}
-                    WHERE zoom_level = ?
-                );
-            """
-            (matrix_height,) = (cur.execute(matrix_stmt.format("tile_row", "tiles"),
-                    (level.zoom,))).fetchone()
-            (matrix_width,) = (cur.execute(matrix_stmt.format("tile_column",
-            "tiles"), (level.zoom,))).fetchone()
-            # For each zoom, calc the max extent and update gpkg_tile_matrix
             cur.execute(tile_matrix_stmt, (
-                "tiles", level.zoom, matrix_width, matrix_height,
+                "tiles", level.zoom, level.matrix_width, level.matrix_height,
                 self.__projection.tile_size, self.__projection.tile_size,
                 self.__projection.pixel_size(level.zoom),
                 self.__projection.pixel_size(level.zoom)))
@@ -785,10 +718,14 @@ class Geopackage(object):
         """
         # get bounding box info based on
         top_level = min(metadata, key=attrgetter('zoom'))
-        top_level.min_x = self.__projection.truncate(top_level.min_x)
-        top_level.min_y = self.__projection.truncate(top_level.min_y)
-        top_level.max_x = self.__projection.truncate(top_level.max_x)
-        top_level.max_y = self.__projection.truncate(top_level.max_y)
+        #top_level.min_x = self.__projection.truncate(top_level.min_x)
+        #top_level.min_y = self.__projection.truncate(top_level.min_y)
+        #top_level.max_x = self.__projection.truncate(top_level.max_x)
+        #top_level.max_y = self.__projection.truncate(top_level.max_y)
+        top_level.min_x = top_level.min_x
+        top_level.min_y = top_level.min_y
+        top_level.max_x = top_level.max_x
+        top_level.max_y = top_level.max_y
         # write bounds and matrix set info to table
         cur.execute(contents_stmt, (top_level.min_x, top_level.min_y,
             top_level.max_x, top_level.max_y))
@@ -799,13 +736,7 @@ class Geopackage(object):
         self.close()
 
     def execute(self, statement, inputs=None):
-        """
-        Executes a prepared SQL statement on this geopackage database.
-
-        Inputs:
-        statement -- string sql statement
-        inputs -- values to be inserted into the sql statement at execution time
-        """
+        """Execute a prepared SQL statement on this geopackage database."""
         self.open()
         cur = self.__db.cursor()
         if inputs is not None:
@@ -815,13 +746,7 @@ class Geopackage(object):
         return result_cursor
 
     def assimilate(self, source):
-        """
-        Assimilates .gpkg.part tiles into this geopackage database.
-
-        Inputs:
-        source -- a full file path to a .gpkg.part file containing a subset
-                  of tiles to be assimilated
-        """
+        """Assimilate .gpkg.part tiles into this geopackage database."""
         self.open()
         self.__db.execute("pragma synchronous = off;")
         self.__db.execute("pragma journal_mode = off;")
@@ -844,17 +769,13 @@ class Geopackage(object):
         remove(source)
 
     def open(self):
-        """
-        Opens this geopackage database for writing.
-        """
+        """Open this geopackage database for writing."""
         if self.__db is not None:
             self.close()
         self.__db = connect(self.__file_path)
 
     def close(self):
-        """
-        Closes this geopackage database.
-        """
+        """Close this geopackage database."""
         self.__db.close()
 
 class TempDB(object):
@@ -1102,9 +1023,10 @@ def allocate(cores, pool, file_list, extra_args):
         tail = allocate(cores/2, pool, file_list[files/2:], extra_args)
         return head + tail
 
+
 def build_lut(file_list, lower_left, srs):
     """
-    Builds a lookup table that aids in metadata generation.
+    Build a lookup table that aids in metadata generation.
 
     Inputs:
     file_list -- the file_list dict made with file_count()
@@ -1146,25 +1068,39 @@ def build_lut(file_list, lower_left, srs):
             level.min_tile_col = 2 * prev.min_tile_col
             level.max_tile_row = 2 * prev.max_tile_row + 1
             level.max_tile_col = 2 * prev.max_tile_col + 1
+            # Calculate the width and height
+            level.matrix_width = prev.matrix_width * 2
+            level.matrix_height = prev.matrix_height * 2
         else:
             # Get all possible x and y values...
             x_vals = [int(item['x']) for item in file_list
-                    if int(item['z']) == zoom]
+                      if int(item['z']) == zoom]
             y_vals = [int(item['y']) for item in file_list
-                    if int(item['z']) == zoom]
+                      if int(item['z']) == zoom]
             # then get the min/max values for each.
             level.min_tile_row, level.max_tile_row = min(x_vals), max(x_vals)
             level.min_tile_col, level.max_tile_col = min(y_vals), max(y_vals)
+            # Fill in the matrix width and height for this top level
+            x_width_max = max([item['x'] for item in file_list
+                               if item['z'] == level.zoom])
+            x_width_min = min([item['x'] for item in file_list
+                               if item['z'] == level.zoom])
+            level.matrix_width = (x_width_max - x_width_min) or 1
+            y_height_max = max([item['y'] for item in file_list
+                               if item['z'] == level.zoom])
+            y_height_min = min([item['y'] for item in file_list
+                               if item['z'] == level.zoom])
+            level.matrix_height = (y_height_max - y_height_min) or 1
         if lower_left:
             # TMS-style tile grid, so to calc the top left corner of the grid,
             # you must get the min x (row) value and the max y (col) value + 1.
             # You are adding 1 to the y value because the math to calc the
             # coord assumes you want the bottom left corner, not the top left.
             # Similarly, to get the bottom right corner, add 1 to x value.
-            level.min_x, level.max_y = projection.get_coord(level.zoom,
-                    level.min_tile_row, level.max_tile_col + 1)
-            level.max_x, level.min_y = projection.get_coord(level.zoom,
-                    level.max_tile_row + 1, level.min_tile_col)
+            level.min_x, level.max_y = projection.get_coord(
+                level.zoom, level.min_tile_row, level.max_tile_col + 1)
+            level.max_x, level.min_y = projection.get_coord(
+                level.zoom, level.max_tile_row + 1, level.min_tile_col)
         else:
             # WMTS-style tile grid, so to calc the top left corner of the grid,
             # you must get the min x (row value and the min y (col) value + 1.
@@ -1174,10 +1110,10 @@ def build_lut(file_list, lower_left, srs):
             # -- Since this is WMTS, we must invert the Y axis before we calc
             inv_min_y = projection.invert_y(level.zoom, level.min_tile_col)
             inv_max_y = projection.invert_y(level.zoom, level.max_tile_col)
-            level.min_x, level.max_y = projection.get_coord(level.zoom,
-                    level.min_tile_row, inv_min_y + 1)
-            level.max_x, level.min_y = projection.get_coord(level.zoom,
-                    level.max_tile_row + 1, inv_max_y)
+            level.min_x, level.max_y = projection.get_coord(
+                level.zoom, level.min_tile_row, inv_min_y + 1)
+            level.max_x, level.min_y = projection.get_coord(
+                level.zoom, level.max_tile_row + 1, inv_max_y)
         # Finally, add this ZoomMetadata object to the list
         matrix.append(level)
     return matrix
@@ -1216,7 +1152,7 @@ def combine_worker_dbs(out_geopackage):
     print " All geopackages merged!"
 
 def main(arg_list):
-    """ 
+    """
     Create a geopackage from a directory of tiles arranged in TMS or WMTS
     format.
 
