@@ -22,5 +22,5 @@ Consortium](http://opengeospatial.org/standards/geopackage)
 
 ### Download stable versions
 
-* [Release 3.0 - Archived on 2015-02-11](https://github.com/GitHubRGI/geopackage-python/archive/geopackage-python_release3.0.zip) - Fix for matrix with and height metadata calculations
+* [Release 3.0 - Archived on 2015-02-11](https://github.com/GitHubRGI/geopackage-python/archive/geopackage-python_release3.0.zip) - Fix for matrix width and height metadata calculations
 * [Release 2.0 - Archived on 2015-01-13](https://github.com/GitHubRGI/geopackage-python/archive/geopackage-python_release2.0.zip)
