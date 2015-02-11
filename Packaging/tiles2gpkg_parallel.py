@@ -446,7 +446,7 @@ class ZoomMetadata(object):
     @property
     def matrix_width(self):
         """Number of tiles wide this matrix should be."""
-        return self.__matrix_width
+        return (self.__matrix_width if hasattr(self, 'matrix_width') else None)
 
     @matrix_width.setter
     def matrix_width(self, value):
@@ -456,7 +456,7 @@ class ZoomMetadata(object):
     @property
     def matrix_height(self):
         """Number of tiles high this matrix should be."""
-        return self.__matrix_height
+        return self.__matrix_height or None
 
     @matrix_height.setter
     def matrix_height(self, value):

@@ -26,93 +26,105 @@
     Description: Test cases for tiles2gpkg_parallel.py
 """
 
-from os import walk
-from os import mkdir
+from math import pi
 from os import chdir
 from os import getcwd
-from os import remove
 from os import listdir
-from PIL import ImageDraw
-from math import pi
-from uuid import uuid4
-from random import randint
-from os.path import join
+from os import mkdir
+from os import remove
+from os import walk
+
 from os.path import abspath
+from os.path import join
+from random import randint
 from sqlite3 import Binary
-from sqlite3 import ProgrammingError
 from sqlite3 import OperationalError
+from sqlite3 import ProgrammingError
+from sys import path
 from tempfile import gettempdir
+from uuid import uuid4
+
+from PIL import ImageDraw
 from PIL.Image import new
 from PIL.Image import open as iopen
 
-from sys import path
 path.append(abspath("Packaging"))
-from tiles2gpkg_parallel import Mercator
-from tiles2gpkg_parallel import Geodetic
 from tiles2gpkg_parallel import EllipsoidalMercator
-from tiles2gpkg_parallel import ScaledWorldMercator
-from tiles2gpkg_parallel import ZoomMetadata
+from tiles2gpkg_parallel import Geodetic
 from tiles2gpkg_parallel import Geopackage
-from tiles2gpkg_parallel import img_to_buf
+from tiles2gpkg_parallel import Mercator
+from tiles2gpkg_parallel import ScaledWorldMercator
 from tiles2gpkg_parallel import TempDB
-from tiles2gpkg_parallel import img_has_transparency
-from tiles2gpkg_parallel import split_all
-from tiles2gpkg_parallel import file_count
-from tiles2gpkg_parallel import worker_map
-from tiles2gpkg_parallel import sqlite_worker
+from tiles2gpkg_parallel import ZoomMetadata
 from tiles2gpkg_parallel import allocate
 from tiles2gpkg_parallel import build_lut
 from tiles2gpkg_parallel import combine_worker_dbs
-from tiles2gpkg_parallel import main
+from tiles2gpkg_parallel import file_count
+from tiles2gpkg_parallel import img_has_transparency
+from tiles2gpkg_parallel import img_to_buf
+from tiles2gpkg_parallel import split_all
+from tiles2gpkg_parallel import sqlite_worker
+from tiles2gpkg_parallel import worker_map
 
 GEODETIC_FILE_PATH = join(getcwd(), "rgb_tiles", "geodetic")
 MERCATOR_FILE_PATH = join(getcwd(), "Testing", "rgb_tiles", "mercator")
 
 # testing commands:
-# py.test --cov-report term-missing --cov tiles2gpkg_parallel test_tiles2gpkg.py
+# py.test --cov-report term-missing \
+#         --cov tiles2gpkg_parallel test_tiles2gpkg.py
+
 
 class TestMercator:
+
+    """Test the Mercator object."""
+
     def test_tile_size(self):
+        """Test tile size default."""
         merc = Mercator()
         assert merc.tile_size == 256
 
     def test_radius(self):
+        """Test radius for mercator."""
         merc = Mercator()
         assert merc.radius == 6378137
 
     def test_origin_shift(self):
+        """Test origin shift calculation."""
         merc = Mercator()
         assert merc.origin_shift == pi * merc.radius
 
     def test_init_res(self):
+        """Test initial resolution calculation."""
         merc = Mercator()
         assert merc.initial_resolution == 2 * \
             merc.origin_shift / merc.tile_size
 
     def test_invert_y_one(self):
+        """Test inverted Y axis calculation."""
         z = 1
         y = 0
         assert Mercator.invert_y(z, y) == 1
 
     def test_invert_y_two(self):
+        """Test a more complicated Y axis inversion."""
         z = 13
         y = 31
         assert Mercator.invert_y(z, y) == 8160
 
     def test_pixel_size(self):
+        """Test pixel size calculation."""
         z = randint(0, 21)
         result = Mercator.pixel_size(z)
         assert result * 2**z == 156543.033928041
 
     def test_tile_to_lat_lon_one(self):
+        """Test conversion from tile coordinate to lat/lon."""
         z = x = y = 0
         lat, lon = Mercator.tile_to_lat_lon(z, x, y)
         assert lon == -180.0 and lat == -85.0511287798066
 
     def test_tile_to_lat_lon_two(self):
-        """
-        Test the top right corner of zoom 0
-        """
+        """Test the top right corner of zoom 0."""
         z = 0
         x = y = 1
         lat, lon = Mercator.tile_to_lat_lon(z, x, y)
@@ -125,6 +137,7 @@ class TestMercator:
             lat == 34.56085936708385
 
     def test_tile_to_lat_lon_four(self):
+        """Test a random tile to lat/lon."""
         z = 14
         x = 11333
         y = 9871
@@ -133,6 +146,7 @@ class TestMercator:
             lat == 34.57895241036947
 
     def test_tile_to_meters_one(self):
+        """Test conversion from tile coordinate to meters."""
         merc = Mercator()
         z = x = y = 0
         mx, my = merc.tile_to_meters(z, x, y)
@@ -142,6 +156,7 @@ class TestMercator:
             float(my) == -20037508.34
 
     def test_tile_to_meters_two(self):
+        """Test conversion with a different tile coord to meters."""
         merc = Mercator()
         z = 0
         x = y = 1
@@ -152,6 +167,7 @@ class TestMercator:
             float(my) == 20037508.34
 
     def test_tile_to_meters_three(self):
+        """Test a random tile to meters."""
         merc = Mercator()
         z = 14
         x = 11332
@@ -163,6 +179,7 @@ class TestMercator:
             float(my) == 4104362.67
 
     def test_tile_to_meters_four(self):
+        """Test another corner of a random tile to meters."""
         merc = Mercator()
         z = 14
         x = 11333
@@ -174,12 +191,14 @@ class TestMercator:
             float(my) == 4106808.65
 
     def test_truncate(self):
+        """Test mercator accuracy truncation."""
         merc = Mercator()
         f = 1234.567890123
         result = merc.truncate(f)
         assert float(result) == 1234.56
 
     def test_get_coord_one(self):
+        """Test get coordinate from tile method."""
         merc = Mercator()
         z = x = y = 0
         mx, my = merc.get_coord(z, x, y)
@@ -189,6 +208,7 @@ class TestMercator:
             float(my) == -20037508.34
 
     def test_get_coord_two(self):
+        """Test get coord with a random tile."""
         merc = Mercator()
         z = 14
         x = 11332
@@ -199,7 +219,11 @@ class TestMercator:
         assert float(mx) == 7680392.60 and \
             float(my) == 4104362.67
 
+
 class TestGeodetic:
+
+    """Test the Geodetic object."""
+
     def test_tile_size(self):
         geod = Geodetic()
         assert geod.tile_size == 256
@@ -263,7 +287,11 @@ class TestGeodetic:
         result = Geodetic.truncate(x)
         assert float(result) == 12.3456789
 
+
 class TestEllipsoidalMercator:
+
+    """Test the Ellipsoidal Mercator object."""
+
     def test_lat_to_northing(self):
         # TODO: need input from Micah
         return True
@@ -329,7 +357,11 @@ class TestEllipsoidalMercator:
         assert lat == 38.74009055509699 and \
             lon == -77.14599609375
 
+
 class TestScaledWorldMercator:
+
+    """Test the Scaled World Mercator object."""
+
     def test_lat_to_northing(self):
         # TODO: Input needed from Micah
         return True
@@ -363,7 +395,11 @@ class TestScaledWorldMercator:
         my = round(my, 2)
         assert float(mx) == expected and float(my) == expected
 
+
 class TestZoomMetadata:
+
+    """Test the ZoomMetadata object."""
+
     def test_zoom_meta_data_zoom(self):
         zmd = make_zmd()
         assert zmd.zoom is 1
@@ -400,7 +436,11 @@ class TestZoomMetadata:
         zmd = make_zmd()
         assert zmd.max_y is 2
 
+
 class Testgeopackage:
+
+    """Test the Geopackage object."""
+
     def test_file_path(self):
         filename = uuid4().hex + '.gpkg'
         tmp_dir = gettempdir()
@@ -474,18 +514,13 @@ class Testgeopackage:
             FROM gpkg_tile_matrix
             WHERE zoom_level is ?;
         """
-        test_tile_row_count_stmt = """
-             SELECT COUNT (tile_row) FROM 
-             (SELECT DISTINCT tile_row FROM tiles
-              WHERE zoom_level = ?)
-        """
         gpkg = make_gpkg()
         gpkg.update_metadata(make_zmd_list_geodetic())
         for zoom in xrange(2, 6):
             (result,) = gpkg.execute(test_width_stmt, (zoom,))
-            (width,) = gpkg.execute(test_tile_row_count_stmt, (zoom,))
-            if result[0] != width[0]:
-                print zoom, result[0], width[0]
+            width = (4 if zoom == 2 else (2**zoom))
+            if result[0] != width:
+                print zoom, result[0], width
                 assert False
         assert True
 
@@ -495,22 +530,21 @@ class Testgeopackage:
             FROM gpkg_tile_matrix
             WHERE zoom_level is ?;
         """
-        test_tile_column_count_stmt = """
-             SELECT COUNT (tile_column) FROM 
-             (SELECT DISTINCT tile_column FROM tiles
-              WHERE zoom_level = ?)
-        """
         gpkg = make_gpkg()
         gpkg.update_metadata(make_zmd_list_geodetic())
         for zoom in xrange(2, 6):
             (result,) = gpkg.execute(test_height_stmt, (zoom,))
-            (height,) = gpkg.execute(test_tile_column_count_stmt, (zoom,))
-            if result[0] != height[0]:
-                print zoom, result[0], height[0]
+            height = (2 if zoom == 2 else (2**(zoom-1)))
+            if result[0] != height:
+                print zoom, result[0], height
                 assert False
             assert True
 
+
 class TestTempDB:
+
+    """Test the TempDB object."""
+
     def __make_tempDB(self):
         chdir(gettempdir())
         temp_folder = uuid4().hex
@@ -537,7 +571,11 @@ class TestTempDB:
         result = tempDB.cursor.execute("select count(*) from tiles;")
         assert result.fetchone()[0] == 1
 
+
 class TestImgToBuf:
+
+    """Test the img_to_buf method."""
+
     def test_img_to_buf_jpg(self):
         img = new("RGB", (256, 256), "red")
         data = img_to_buf(img, 'jpeg').read()
@@ -560,7 +598,10 @@ class TestImgToBuf:
         # a 'JFIF' chunk in the bitstream indicates a .jpg image
         assert 'JFIF' in data
 
+
 class TestImgHasTransparency:
+
+    """Test the img_has_transparency method."""
     def test_not_transparent(self):
         img = new("RGB", (256, 256), "red")
         assert img_has_transparency(img) == 0
@@ -585,8 +626,10 @@ class TestImgHasTransparency:
         img = new('P', (256, 256))
         assert img_has_transparency(img) == 0
 
+
 def test_file_count():
     assert len(file_count(MERCATOR_FILE_PATH)) == 4
+
 
 def test_split_all():
     coords = ["1", "2", "3.png"]
@@ -596,6 +639,7 @@ def test_split_all():
         result['x'] == int(coords[1]) and \
         result['y'] == int(coords[2].split(".")[0]) and \
         result['path'] == file_path
+
 
 def test_worker_map():
     session_folder = make_session_folder()
@@ -611,7 +655,11 @@ def test_worker_map():
     # assert the worker_map function put the .gpkg.part file into the db
     assert len(files) == 1 and '.gpkg.part' in files[0]
 
-class testsqliteworker:
+
+class TestSqliteWorker:
+
+    """Test the sqlite_worker function."""
+
     def test_sqlite_worker_4326(self):
         session_folder = make_session_folder()
         file_list = make_geodetic_filelist()
@@ -657,8 +705,9 @@ class testsqliteworker:
         files = listdir(session_folder)
         assert len(files) == 1 and '.gpkg.part' in files[0]
 
-class testallocate:
-    class mockpool:
+
+class TestAllocate:
+    class MockPool:
         def __init__(self):
             self.works = True
 
@@ -680,7 +729,11 @@ class testallocate:
         else:
             assert e is not None and type(e) == TypeError
 
-class testbuildlut:
+
+class TestBuildLut:
+
+    """Test the build_lut function."""
+
     def test_build_lut_scaled_world_mercator(self):
         result = build_lut(make_mercator_filelist(), False, 9804)
         assert result[0].zoom == 1
@@ -733,6 +786,7 @@ class testbuildlut:
         result = build_lut(make_geodetic_filelist(), True, 4326)
         assert result[0].max_y == 90.0
 
+
 def test_combine_worker_dbs():
     session_folder = make_session_folder()
     # make a random number of tempdbs with dummy data
@@ -747,6 +801,7 @@ def test_combine_worker_dbs():
     combine_worker_dbs(gpkg)
     result = gpkg.execute("select count(*) from tiles;")
     assert (result.fetchone())[0] == z
+
 
 # todo: test main
 def test_main():
@@ -766,10 +821,12 @@ def test_main():
     # main(arg_list)
     assert True
 
+
 def make_gpkg():
     filename = uuid4().hex + '.gpkg'
     tmp_file = join(gettempdir(), filename)
     return Geopackage(tmp_file, 4326)
+
 
 def make_zmd():
     zmd = ZoomMetadata()
@@ -782,9 +839,13 @@ def make_zmd():
     zmd.max_tile_row = 2
     zmd.max_x = 2
     zmd.max_y = 2
+    zmd.matrix_width = 2
+    zmd.matrix_height = 2
     return zmd
 
+
 def make_zmd_list_geodetic():
+    """Make a geodetic zoom level metadata mock object."""
     zmd_list = []
     for zoom in xrange(2, 6):
         zmd = ZoomMetadata()
@@ -797,6 +858,8 @@ def make_zmd_list_geodetic():
         zmd.max_x = zmd.max_tile_row
         zmd.max_tile_col = (2**(zoom-1)) - 1
         zmd.max_y = zmd.max_tile_col
+        zmd.matrix_width = (4 if zoom == 2 else zmd_list[zoom-3].matrix_width * 2)
+        zmd.matrix_height = (2 if zoom == 2 else zmd_list[zoom-3].matrix_height * 2)
         zmd_list.append(zmd)
     return zmd_list
 
@@ -811,6 +874,7 @@ def make_mercator_filelist():
     d4 = dict(x=1, y=1, z=1, path=file_path[3])
     return [d1, d2, d3, d4]
 
+
 def make_geodetic_filelist():
     file_path = []
     for root, sub_folders, files in walk(GEODETIC_FILE_PATH):
@@ -822,9 +886,9 @@ def make_geodetic_filelist():
     d5 = dict(z=2, x=1, y=1, path=file_path[4])
     return [d1, d2, d3, d4, d5]
 
+
 def make_session_folder():
     session_folder = uuid4().hex
     chdir(gettempdir())
     mkdir(session_folder)
     return session_folder
-
