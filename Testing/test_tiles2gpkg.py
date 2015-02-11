@@ -656,7 +656,7 @@ def test_worker_map():
     assert len(files) == 1 and '.gpkg.part' in files[0]
 
 
-class TestSqliteWorker:
+class testsqliteworker:
 
     """Test the sqlite_worker function."""
 
@@ -706,7 +706,7 @@ class TestSqliteWorker:
         assert len(files) == 1 and '.gpkg.part' in files[0]
 
 
-class TestAllocate:
+class testallocate:
     class MockPool:
         def __init__(self):
             self.works = True
@@ -730,7 +730,7 @@ class TestAllocate:
             assert e is not None and type(e) == TypeError
 
 
-class TestBuildLut:
+class testbuildlut:
 
     """Test the build_lut function."""
 
