@@ -48,9 +48,10 @@ except ImportError:
     IOPEN = None
 
 # JPEGs @ 75% provide good quality images with low footprint, use as a default
-# PNGs should be used sparingly (mixed mode) due to their high disk usage (RGBA)
+# PNGs should be used sparingly (mixed mode) due to their high disk usage RGBA
 # Options are mixed, jpeg, and png
 IMAGE_TYPES = '.png', '.jpeg', '.jpg'
+
 
 class Mercator(object):
     """
@@ -147,6 +148,7 @@ class Mercator(object):
         """
         return '%.2f' % (int(coord*100)/float(100))
 
+
 class Geodetic(object):
     """
     Geodetic projection class that holds specific calculations and formulas for
@@ -198,6 +200,7 @@ class Geodetic(object):
         places for Geodetic).
         """
         return '%.7f' % (int(coord*10000000)/float(10000000))
+
 
 class EllipsoidalMercator(Mercator):
     """
@@ -267,6 +270,7 @@ class EllipsoidalMercator(Mercator):
         meters_x = lon * self.origin_shift / 180.0
         meters_y = self.lat_to_northing(lat * pi / 180.0)
         return meters_x, meters_y
+
 
 class ScaledWorldMercator(EllipsoidalMercator):
     """
@@ -778,6 +782,7 @@ class Geopackage(object):
         """Close this geopackage database."""
         self.__db.close()
 
+
 class TempDB(object):
     """
     Returns a temporary sqlite database to hold tiles for async workers.
@@ -839,6 +844,7 @@ class TempDB(object):
         self.cursor.execute(self.image_blob_stmt, (z, x, y, data))
         self.db.commit()
 
+
 def img_to_buf(img, img_type, jpeg_quality=75):
     """
     Returns a buffer array with image binary data for the input image.
@@ -860,6 +866,7 @@ def img_to_buf(img, img_type, jpeg_quality=75):
     img.save(buf, img_type, **defaults)
     buf.seek(0)
     return buf
+
 
 def img_has_transparency(img):
     """
@@ -896,6 +903,7 @@ def img_has_transparency(img):
         #return img.histogram()[-size]
     return False
 
+
 def file_count(base_dir):
     """
     A function that finds all image tiles in a base directory.  The base
@@ -918,6 +926,7 @@ def file_count(base_dir):
     print "Found", len(file_list), "total tiles."
     return [split_all(item) for item in file_list]
 
+
 def split_all(path):
     """
     Function that parses TMS coordinates from a full images file path.
@@ -939,6 +948,7 @@ def split_all(path):
     file_dict = dict(y=int(parts[0].split('.')[0]), x=int(parts[1]),
             z=int(parts[2]), path=full_path)
     return file_dict
+
 
 def worker_map(temp_db, tile_dict, extra_args, invert_y):
     """
@@ -981,6 +991,7 @@ def worker_map(temp_db, tile_dict, extra_args, invert_y):
         temp_db.insert_image_blob(zoom, x_row, y_column, data)
         file_handle.close()
 
+
 def sqlite_worker(file_list, extra_args):
     """
     Worker function called by asynchronous processes.  This function
@@ -1007,6 +1018,7 @@ def sqlite_worker(file_list, extra_args):
             invert_y = ScaledWorldMercator.invert_y
     [worker_map(temp_db, item, extra_args, invert_y) for item in file_list]
     temp_db.close()
+
 
 def allocate(cores, pool, file_list, extra_args):
     """
@@ -1118,6 +1130,7 @@ def build_lut(file_list, lower_left, srs):
         matrix.append(level)
     return matrix
 
+
 def combine_worker_dbs(out_geopackage):
     """
     Searches for .gpkg.part files in the base directory and merges them
@@ -1150,6 +1163,7 @@ def combine_worker_dbs(out_geopackage):
         else:
             counter = 0
     print " All geopackages merged!"
+
 
 def main(arg_list):
     """
