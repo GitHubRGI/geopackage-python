@@ -1099,12 +1099,12 @@ def build_lut(file_list, lower_left, srs):
                                if item['z'] == level.zoom])
             x_width_min = min([item['x'] for item in file_list
                                if item['z'] == level.zoom])
-            level.matrix_width = (x_width_max - x_width_min) or 1
+            level.matrix_width = (x_width_max - x_width_min) + 1
             y_height_max = max([item['y'] for item in file_list
                                if item['z'] == level.zoom])
             y_height_min = min([item['y'] for item in file_list
                                if item['z'] == level.zoom])
-            level.matrix_height = (y_height_max - y_height_min) or 1
+            level.matrix_height = (y_height_max - y_height_min) + 1
         if lower_left:
             # TMS-style tile grid, so to calc the top left corner of the grid,
             # you must get the min x (row) value and the max y (col) value + 1.
