@@ -767,8 +767,8 @@ class Geopackage(object):
             FROM source.tiles;""")
             self.__db.execute("detach source;")
         except Error as err:
-            print "Error:", type(err)
-            print "Error msg:", err
+            print("Error:", type(err))
+            print("Error msg:", err)
             raise
         finally:
             self.close()
@@ -918,14 +918,14 @@ def file_count(base_dir):
     A list of dictionary objects containing the full file path and TMS
     coordinates of the image tile.
     """
-    print "Calculating number of tiles, this could take a while..."
+    print("Calculating number of tiles, this could take a while...")
     file_list = []
     # Avoiding dots (functional references) will increase performance of
     #  the loop because they will not be reevaluated each iteration.
     for root, sub_folders, files in walk(base_dir):
         temp_list = [join(root, f) for f in files if f.endswith(IMAGE_TYPES)]
         file_list += temp_list
-    print "Found", len(file_list), "total tiles."
+    print("Found", len(file_list), "total tiles.")
     return [split_all(item) for item in file_list]
 
 
@@ -1029,7 +1029,7 @@ def allocate(cores, pool, file_list, extra_args):
     not, then N is the largest factor of 8 that is still less than C.
     """
     if cores is 1:
-        print "Spawning worker with", len(file_list), "files"
+        print("Spawning worker with", len(file_list), "files")
         return [pool.apply_async(sqlite_worker, [file_list, extra_args])]
     else:
         files = len(file_list)
@@ -1146,7 +1146,7 @@ def combine_worker_dbs(out_geopackage):
         base_dir = "."
     glob_path = join(base_dir + '/*.gpkg.part')
     file_list = glob(glob_path)
-    print "Merging temporary databases..."
+    print("Merging temporary databases...")
     #[out_geopackage.assimilate(f) for f in file_list]
     itr = len(file_list)
     status = ["|", "/", "-", "\\"]
@@ -1164,7 +1164,7 @@ def combine_worker_dbs(out_geopackage):
             counter += 1
         else:
             counter = 0
-    print " All geopackages merged!"
+    print(" All geopackages merged!")
 
 
 def main(arg_list):
@@ -1180,7 +1180,7 @@ def main(arg_list):
     files = file_count(arg_list.source_folder)
     if len(files) == 0:
         # If there are no files, exit the script
-        print " Ensure the correct source tile directory was specified."
+        print(" Ensure the correct source tile directory was specified.")
         exit(1)
     # Is the input tile grid aligned to lower-left or not?
     lower_left = arg_list.tileorigin == 'll' or arg_list.tileorigin == 'sw'
@@ -1207,7 +1207,7 @@ def main(arg_list):
                 stdout.write("\r[X] Progress: [" + "=="*(cores-rem) +
                         "  "*rem + "]")
                 stdout.flush()
-                print " All Done!"
+                print(" All Done!")
                 break
             else:
                 stdout.write("\r[" + status[counter] + "] Progress: [" +
@@ -1230,15 +1230,15 @@ def main(arg_list):
     combine_worker_dbs(output_geopackage)
     # Using the data in the output file, create the metadata for it
     output_geopackage.update_metadata(tile_info)
-    print "Complete"
+    print("Complete")
 
 if __name__ == '__main__':
-    print """
+    print("""
         tiles2gpkg_parallel.py  Copyright (C) 2014  Reinventing Geospatial, Inc
         This program comes with ABSOLUTELY NO WARRANTY.
         This is free software, and you are welcome to redistribute it
         under certain conditions.
-    """
+    """)
     PARSER = ArgumentParser(description="Convert TMS folder into geopackage")
     PARSER.add_argument("source_folder", metavar="source",
             help="Source folder of TMS files.")
@@ -1265,10 +1265,10 @@ if __name__ == '__main__':
     ARG_LIST = PARSER.parse_args()
     if not exists(ARG_LIST.source_folder) or exists(ARG_LIST.output_file):
         PARSER.print_usage()
-        print "Ensure that TMS directory exists and out file does not."
+        print("Ensure that TMS directory exists and out file does not.")
         exit(1)
     if ARG_LIST.q is not None and ARG_LIST.imagery == 'png':
         PARSER.print_usage()
-        print "-q cannot be used with png"
+        print("-q cannot be used with png")
         exit(1)
     main(ARG_LIST)
