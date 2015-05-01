@@ -35,7 +35,11 @@ from glob import glob
 from time import sleep
 from uuid import uuid4
 from sys import stdout
-from cStringIO import StringIO
+try:
+    from cStringIO import StringIO
+except ImportError:
+    # Python3.4
+    from io import StringIO
 from operator import attrgetter
 from sqlite3 import connect, Error
 from sqlite3 import Binary as sbinary
