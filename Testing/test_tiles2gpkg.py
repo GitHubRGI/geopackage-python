@@ -465,7 +465,8 @@ class Testgeopackage:
         except ProgrammingError as e:
             print('ProgrammingError should occur')
         finally:
-            assert e is not None and type(e) == ProgrammingError
+            if e is not None:
+                assert type(e) == ProgrammingError
 
     def test_assimilate_error(self):
         session_folder = make_session_folder()
@@ -479,7 +480,8 @@ class Testgeopackage:
         except OperationalError as OE:
             print('OperationalError should occur.')
         finally:
-            assert OE is not None and type(OE) == OperationalError
+            if OE is not None:
+                assert type(OE) == OperationalError
 
     def test_execute_return(self):
         session_folder = make_session_folder()
@@ -503,7 +505,7 @@ class Testgeopackage:
 
     def test_update_metadata(self):
         zmd_list = []
-        for x in xrange(5):
+        for x in range(5):
             zmd_list.append(make_zmd())
         gpkg = make_gpkg()
         gpkg.update_metadata(zmd_list)
@@ -518,7 +520,7 @@ class Testgeopackage:
         """
         gpkg = make_gpkg()
         gpkg.update_metadata(make_zmd_list_geodetic())
-        for zoom in xrange(2, 6):
+        for zoom in range(2, 6):
             (result,) = gpkg.execute(test_width_stmt, (zoom,))
             width = (4 if zoom == 2 else (2**zoom))
             if result[0] != width:
@@ -534,7 +536,7 @@ class Testgeopackage:
         """
         gpkg = make_gpkg()
         gpkg.update_metadata(make_zmd_list_geodetic())
-        for zoom in xrange(2, 6):
+        for zoom in range(2, 6):
             (result,) = gpkg.execute(test_height_stmt, (zoom,))
             height = (2 if zoom == 2 else (2**(zoom-1)))
             if result[0] != height:
@@ -562,8 +564,8 @@ class TestTempDB:
         except ProgrammingError as e:
             print('ProgrammingError should occur.')
         finally:
-            assert e is not None and e.args[0] == \
-            "Cannot operate on a closed cursor."
+            if e is not None:
+                assert e.args[0] == "Cannot operate on a closed cursor."
 
     def test_insert_image_blob(self):
         img = new("RGB", (256, 256), "red")
@@ -795,7 +797,7 @@ def test_combine_worker_dbs():
     img = new("RGB", (256, 256), "red")
     data = img_to_buf(img, 'jpeg').read()
     z = randint(2, 5)
-    for x in xrange(z):
+    for x in range(z):
         TempDB(session_folder).insert_image_blob(x, 0, 0, Binary(data))
     # confirm that combine_worker_dbs assimilates all tempdb's into gpkg
     chdir(session_folder) # necessary to put gpkg in session_folder
@@ -849,7 +851,7 @@ def make_zmd():
 def make_zmd_list_geodetic():
     """Make a geodetic zoom level metadata mock object."""
     zmd_list = []
-    for zoom in xrange(2, 6):
+    for zoom in range(2, 6):
         zmd = ZoomMetadata()
         zmd.zoom = zoom
         zmd.min_tile_row = 0
