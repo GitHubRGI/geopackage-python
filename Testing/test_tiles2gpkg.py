@@ -463,7 +463,7 @@ class Testgeopackage:
         try:
             gpkg.db.execute('')
         except ProgrammingError as e:
-            print 'ProgrammingError should occur'
+            print('ProgrammingError should occur')
         finally:
             assert e is not None and type(e) == ProgrammingError
 
@@ -477,7 +477,7 @@ class Testgeopackage:
         try:
             gpkg.assimilate("None")
         except OperationalError as OE:
-            print "OperationalError should occur."
+            print('OperationalError should occur.')
         finally:
             assert OE is not None and type(OE) == OperationalError
 
@@ -522,7 +522,7 @@ class Testgeopackage:
             (result,) = gpkg.execute(test_width_stmt, (zoom,))
             width = (4 if zoom == 2 else (2**zoom))
             if result[0] != width:
-                print zoom, result[0], width
+                print(zoom, result[0], width)
                 assert False
         assert True
 
@@ -538,7 +538,7 @@ class Testgeopackage:
             (result,) = gpkg.execute(test_height_stmt, (zoom,))
             height = (2 if zoom == 2 else (2**(zoom-1)))
             if result[0] != height:
-                print zoom, result[0], height
+                print(zoom, result[0], height)
                 assert False
             assert True
 
@@ -560,7 +560,7 @@ class TestTempDB:
         try:
             tempDB.insert_image_blob(0, 0, 0, None)
         except ProgrammingError as e:
-            print 'ProgrammingError should occur.'
+            print('ProgrammingError should occur.')
         finally:
             assert e is not None and e.args[0] == \
             "Cannot operate on a closed cursor."
@@ -727,7 +727,7 @@ class testallocate:
         try:
             allocate(cores, cpu_pool, file_list, extra_args)
         except TypeError as e:
-            print 'success'
+            print('success')
         else:
             assert e is not None and type(e) == TypeError
 
