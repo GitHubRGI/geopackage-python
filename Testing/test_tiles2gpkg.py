@@ -43,12 +43,17 @@ from sqlite3 import Binary
 from sqlite3 import OperationalError
 from sqlite3 import ProgrammingError
 from sys import path
+from sys import version_info
+if version_info[0] == 3:
+    xrange = range
 from tempfile import gettempdir
 from uuid import uuid4
 
 from PIL import ImageDraw
 from PIL.Image import new
 from PIL.Image import open as iopen
+
+from pytest import raises
 
 path.append(abspath("Packaging"))
 from tiles2gpkg_parallel import EllipsoidalMercator
@@ -450,38 +455,13 @@ class Testgeopackage:
         gpkg = Geopackage(tmp_file, 3857)
         assert gpkg.file_path == tmp_file
 
-    def test_open(self):
-        gpkg = make_gpkg()
-        gpkg.open()
-        assert gpkg.db is not None
-
-    def test_close(self):
-        gpkg = make_gpkg()
-        gpkg.open()
-        gpkg.close()
-        e = None
-        try:
-            gpkg.db.execute('')
-        except ProgrammingError as e:
-            print('ProgrammingError should occur')
-        finally:
-            if e is not None:
-                assert type(e) == ProgrammingError
-
     def test_assimilate_error(self):
         session_folder = make_session_folder()
         chdir(session_folder)
         gpkg = Geopackage(session_folder, 3395)
         remove(join(getcwd(), gpkg.file_path))
-        gpkg.execute("")
-        OE = None
-        try:
+        with raises(IOError):
             gpkg.assimilate("None")
-        except OperationalError as OE:
-            print('OperationalError should occur.')
-        finally:
-            if OE is not None:
-                assert type(OE) == OperationalError
 
     def test_execute_return(self):
         session_folder = make_session_folder()
@@ -505,7 +485,7 @@ class Testgeopackage:
 
     def test_update_metadata(self):
         zmd_list = []
-        for x in range(5):
+        for _ in xrange(5):
             zmd_list.append(make_zmd())
         gpkg = make_gpkg()
         gpkg.update_metadata(zmd_list)
@@ -520,7 +500,7 @@ class Testgeopackage:
         """
         gpkg = make_gpkg()
         gpkg.update_metadata(make_zmd_list_geodetic())
-        for zoom in range(2, 6):
+        for zoom in xrange(2, 6):
             (result,) = gpkg.execute(test_width_stmt, (zoom,))
             width = (4 if zoom == 2 else (2**zoom))
             if result[0] != width:
@@ -536,7 +516,7 @@ class Testgeopackage:
         """
         gpkg = make_gpkg()
         gpkg.update_metadata(make_zmd_list_geodetic())
-        for zoom in range(2, 6):
+        for zoom in xrange(2, 6):
             (result,) = gpkg.execute(test_height_stmt, (zoom,))
             height = (2 if zoom == 2 else (2**(zoom-1)))
             if result[0] != height:
@@ -555,24 +535,12 @@ class TestTempDB:
         mkdir(temp_folder)
         return TempDB(temp_folder)
 
-    def test_close(self):
-        tempDB = self.__make_tempDB()
-        tempDB.close()
-        e = None
-        try:
-            tempDB.insert_image_blob(0, 0, 0, None)
-        except ProgrammingError as e:
-            print('ProgrammingError should occur.')
-        finally:
-            if e is not None:
-                assert e.args[0] == "Cannot operate on a closed cursor."
-
     def test_insert_image_blob(self):
         img = new("RGB", (256, 256), "red")
         data = img_to_buf(img, 'jpeg').read()
         tempDB = self.__make_tempDB()
         tempDB.insert_image_blob(0, 0, 0, Binary(data))
-        result = tempDB.cursor.execute("select count(*) from tiles;")
+        result = tempDB.execute("select count(*) from tiles;")
         assert result.fetchone()[0] == 1
 
 
@@ -584,7 +552,7 @@ class TestImgToBuf:
         img = new("RGB", (256, 256), "red")
         data = img_to_buf(img, 'jpeg').read()
         # a 'JFIF' chunk in the bitstream indicates a .jpg image
-        assert 'JFIF' in data
+        assert b'JFIF' in data
 
     def test_img_to_buf_png(self):
         img = new("RGB", (256, 256), "red")
@@ -592,7 +560,7 @@ class TestImgToBuf:
         data = img_to_buf(img, 'png').read()
         # ImageHeaDeR, ImageDATa, and ImageEND are
         # all necessary chunks in a .PNG bitstream
-        assert 'IHDR' in data and 'IDAT' in data and 'IEND' in data
+        assert b'IHDR' in data and b'IDAT' in data and b'IEND' in data
 
     def test_img_to_buf_source(self):
         img = new("RGB", (256, 256), "red")
@@ -600,7 +568,7 @@ class TestImgToBuf:
         img.format = "JPEG"
         data = img_to_buf(img, 'source').read()
         # a 'JFIF' chunk in the bitstream indicates a .jpg image
-        assert 'JFIF' in data
+        assert b'JFIF' in data
 
 
 class TestImgHasTransparency:
@@ -622,7 +590,7 @@ class TestImgHasTransparency:
 
     def test_paletted_image_transparent(self):
         img = new("P", (256, 256), 0)
-        img.save("test1.png", "PNG", transparency="\x00")
+        img.save("test1.png", "PNG", transparency=b'\x00')
         img = iopen("test1.png", "r")
         assert img_has_transparency(img)
 
@@ -797,7 +765,7 @@ def test_combine_worker_dbs():
     img = new("RGB", (256, 256), "red")
     data = img_to_buf(img, 'jpeg').read()
     z = randint(2, 5)
-    for x in range(z):
+    for x in xrange(z):
         TempDB(session_folder).insert_image_blob(x, 0, 0, Binary(data))
     # confirm that combine_worker_dbs assimilates all tempdb's into gpkg
     chdir(session_folder) # necessary to put gpkg in session_folder
@@ -851,7 +819,7 @@ def make_zmd():
 def make_zmd_list_geodetic():
     """Make a geodetic zoom level metadata mock object."""
     zmd_list = []
-    for zoom in range(2, 6):
+    for zoom in xrange(2, 6):
         zmd = ZoomMetadata()
         zmd.zoom = zoom
         zmd.min_tile_row = 0
