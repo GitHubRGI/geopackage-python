@@ -769,10 +769,16 @@ class Geopackage(object):
                 FROM source.tiles;""")
                 cursor.execute("detach source;")
             except Error as err:
-                print("Error:", type(err))
-                print("Error msg:", err)
+                print("Error: {}".format(type(err)))
+                print("Error msg:".format(err))
                 raise
             remove(source)
+
+    def close(self):
+        """
+        Closes the sqlite3 db handle for this object.
+        """
+        self.db_con.close()
 
  
 class TempDB(object):
@@ -841,6 +847,7 @@ class TempDB(object):
 
     def close(self):
         """
+        Closes this sqlite3 database handle.
         """
         self.db_con.close()
 
@@ -923,7 +930,7 @@ def file_count(base_dir):
     for root, sub_folders, files in walk(base_dir):
         temp_list = [join(root, f) for f in files if f.endswith(IMAGE_TYPES)]
         file_list += temp_list
-    print("Found", len(file_list), "total tiles.")
+    print("Found {} total tiles.".format(len(file_list)))
     return [split_all(item) for item in file_list]
 
 
@@ -1027,7 +1034,7 @@ def allocate(cores, pool, file_list, extra_args):
     not, then N is the largest factor of 8 that is still less than C.
     """
     if cores is 1:
-        print("Spawning worker with", len(file_list), "files")
+        print("Spawning worker with {} files".format(len(file_list)))
         return [pool.apply_async(sqlite_worker, [file_list, extra_args])]
     else:
         files = len(file_list)
@@ -1233,6 +1240,7 @@ def main(arg_list):
     combine_worker_dbs(output_geopackage)
     # Using the data in the output file, create the metadata for it
     output_geopackage.update_metadata(tile_info)
+    output_geopackage.close()
     print("Complete")
 
 if __name__ == '__main__':
