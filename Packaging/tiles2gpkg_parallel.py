@@ -32,7 +32,10 @@ Version:
 """
 
 from glob import glob
-from io import BytesIO
+try:
+    from cStringIO import StringIO as ioBuffer
+except ImportError:
+    from io import BytesIO as ioBuffer
 from time import sleep
 from uuid import uuid4
 from sys import stdout
@@ -488,11 +491,12 @@ class Geopackage(object):
             self.__projection = ScaledWorldMercator()
         else:
             self.__projection = Geodetic()
+        self.db_con = connect(self.__file_path)
         self.__create_schema()
 
     def __create_schema(self):
         """Create default geopackage schema on the database."""
-        with connect(self.__file_path) as db_con:
+        with self.db_con as db_con:
             cursor = db_con.cursor()
             cursor.execute("""
                 CREATE TABLE gpkg_contents (
@@ -680,7 +684,7 @@ class Geopackage(object):
     def update_metadata(self, metadata):
         """Update the metadata of the geopackage database after tile merge."""
         # initialize a new projection
-        with connect(self.__file_path) as db_con:
+        with self.db_con as db_con:
             cursor = db_con.cursor()
             tile_matrix_stmt = """
                     INSERT OR REPLACE INTO gpkg_tile_matrix (
@@ -738,7 +742,7 @@ class Geopackage(object):
 
     def execute(self, statement, inputs=None):
         """Execute a prepared SQL statement on this geopackage database."""
-        with connect(self.__file_path) as db_con:
+        with self.db_con as db_con:
             cursor = db_con.cursor()
             if inputs is not None:
                 result_cursor = cursor.execute(statement, inputs)
@@ -750,7 +754,7 @@ class Geopackage(object):
         """Assimilate .gpkg.part tiles into this geopackage database."""
         if not exists(source):
             raise IOError
-        with connect(self.__file_path) as db_con:
+        with self.db_con as db_con:
             cursor = db_con.cursor()
             cursor.execute("pragma synchronous = off;")
             cursor.execute("pragma journal_mode = off;")
@@ -787,7 +791,8 @@ class TempDB(object):
         uid = uuid4()
         self.name = uid.hex + '.gpkg.part'
         self.__file_path = join(filename, self.name)
-        with connect(self.__file_path) as db_con:
+        self.db_con = connect(self.__file_path)
+        with self.db_con as db_con:
             cursor = db_con.cursor()
             stmt = """
                 CREATE TABLE tiles (
@@ -811,7 +816,7 @@ class TempDB(object):
         """
 
     def execute(self, statement, inputs=None):
-        with connect(self.__file_path) as db_con:
+        with self.db_con as db_con:
             cursor = db_con.cursor()
             if inputs is not None:
                 result_cursor = cursor.execute(statement, inputs)
@@ -830,9 +835,14 @@ class TempDB(object):
         y -- the column number of the data
         data -- the image data containing in a binary array
         """
-        with connect(self.__file_path) as db_con:
+        with self.db_con as db_con:
             cursor = db_con.cursor()
             cursor.execute(self.image_blob_stmt, (z, x, y, data))
+
+    def close(self):
+        """
+        """
+        self.db_con.close()
 
 
 def img_to_buf(img, img_type, jpeg_quality=75):
@@ -846,7 +856,7 @@ def img_to_buf(img, img_type, jpeg_quality=75):
     img_type -- the MIME type of the image (JPG, PNG)
     """
     defaults = {}
-    buf = BytesIO()
+    buf = ioBuffer()
     if img_type == 'jpeg':
         img.convert('RGB')
         # Hardcoding a default compression of 75% for JPEGs
@@ -966,7 +976,7 @@ def worker_map(temp_db, tile_dict, extra_args, invert_y):
         y_column = tile_dict['y'] - level.min_tile_col
     if IOPEN is not None:
         img = IOPEN(tile_dict['path'], 'r')
-        data = BytesIO()
+        data = ioBuffer()
         if imagery == 'mixed':
             if img_has_transparency(img):
                 data = img_to_buf(img, 'png', jpeg_quality).read()
@@ -1021,8 +1031,8 @@ def allocate(cores, pool, file_list, extra_args):
         return [pool.apply_async(sqlite_worker, [file_list, extra_args])]
     else:
         files = len(file_list)
-        head = allocate(cores/2, pool, file_list[:files/2], extra_args)
-        tail = allocate(cores/2, pool, file_list[files/2:], extra_args)
+        head = allocate(int(cores/2), pool, file_list[:int(files/2)], extra_args)
+        tail = allocate(int(cores/2), pool, file_list[int(files/2):], extra_args)
         return head + tail
 
 
@@ -1189,25 +1199,30 @@ def main(arg_list):
         results = allocate(cores, pool, files, extra_args)
         status = ["|", "/", "-", "\\"]
         counter = 0
-        while True:
-            rem = sum([1 for item in results if not item.ready()])
-            if rem == 0:
-                stdout.write("\r[X] Progress: [" + "=="*(cores-rem) +
-                        "  "*rem + "]")
-                stdout.flush()
-                print(" All Done!")
-                break
-            else:
-                stdout.write("\r[" + status[counter] + "] Progress: [" +
-                        "=="*(cores-rem) + "  "*rem + "]")
-                stdout.flush()
-                if counter != len(status)-1:
-                    counter += 1
+        try:
+            while True:
+                rem = sum([1 for item in results if not item.ready()])
+                if rem == 0:
+                    stdout.write("\r[X] Progress: [" + "=="*(cores-rem) +
+                            "  "*rem + "]")
+                    stdout.flush()
+                    print(" All Done!")
+                    break
                 else:
-                    counter = 0
-            sleep(.25)
-        pool.close()
-        pool.join()
+                    stdout.write("\r[" + status[counter] + "] Progress: [" +
+                            "=="*(cores-rem) + "  "*rem + "]")
+                    stdout.flush()
+                    if counter != len(status)-1:
+                        counter += 1
+                    else:
+                        counter = 0
+                sleep(.25)
+            pool.close()
+            pool.join()
+        except KeyboardInterrupt:
+            print(" Interrupted!")
+            pool.terminate()
+            exit(1)
     else:
         # Debugging call to bypass multiprocessing (-T)
         extra_args = dict(root_dir=root_dir, tile_info=tile_info,
