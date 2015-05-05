@@ -32,17 +32,17 @@ Version:
 """
 
 from glob import glob
+from io import BytesIO
 from time import sleep
 from uuid import uuid4
 from sys import stdout
 from sys import version_info
-from io import BytesIO
 if version_info[0] == 3:
     xrange = range
 from operator import attrgetter
 from sqlite3 import connect, Error
-from sqlite3 import Binary as sbinary
 from argparse import ArgumentParser
+from sqlite3 import Binary as sbinary
 from os import walk, remove
 from os.path import split, join, exists
 from multiprocessing import cpu_count, Pool
@@ -456,7 +456,7 @@ class ZoomMetadata(object):
     def matrix_width(self):
         """Number of tiles wide this matrix should be."""
         #return (self.__matrix_width if hasattr(self, 'matrix_width') else None)
-        return self.__matrix_height or None
+        return self.__matrix_width or None
 
     @matrix_width.setter
     def matrix_width(self, value):

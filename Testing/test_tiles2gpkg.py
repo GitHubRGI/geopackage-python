@@ -502,7 +502,7 @@ class Testgeopackage:
         gpkg.update_metadata(make_zmd_list_geodetic())
         for zoom in xrange(2, 6):
             (result,) = gpkg.execute(test_width_stmt, (zoom,))
-            width = (4 if zoom == 2 else (2**zoom))
+            width = (2**zoom)
             if result[0] != width:
                 print(zoom, result[0], width)
                 assert False
@@ -518,7 +518,7 @@ class Testgeopackage:
         gpkg.update_metadata(make_zmd_list_geodetic())
         for zoom in xrange(2, 6):
             (result,) = gpkg.execute(test_height_stmt, (zoom,))
-            height = (2 if zoom == 2 else (2**(zoom-1)))
+            height = (2**(zoom-1))
             if result[0] != height:
                 print(zoom, result[0], height)
                 assert False
@@ -826,12 +826,20 @@ def make_zmd_list_geodetic():
         zmd.min_x = 0
         zmd.min_tile_col = 0
         zmd.min_y = 0
-        zmd.max_tile_row = (2**zoom) - 1
+        zmd.max_tile_row = (2**(zoom-1)) - 1
         zmd.max_x = zmd.max_tile_row
-        zmd.max_tile_col = (2**(zoom-1)) - 1
+        zmd.max_tile_col = (2**zoom) - 1
         zmd.max_y = zmd.max_tile_col
-        zmd.matrix_width = (4 if zoom == 2 else zmd_list[zoom-3].matrix_width * 2)
-        zmd.matrix_height = (2 if zoom == 2 else zmd_list[zoom-3].matrix_height * 2)
+        #zmd.matrix_width = (4 if zoom == 2 else zmd_list[zoom-3].matrix_width * 2)
+        if zoom == 2:
+            zmd.matrix_width = 4
+        else:
+            zmd.matrix_width = zmd_list[zoom-3].matrix_width * 2
+        #zmd.matrix_height = (2 if zoom == 2 else zmd_list[zoom-3].matrix_height * 2)
+        if zoom == 2:
+            zmd.matrix_height = 2
+        else:
+            zmd.matrix_height = zmd_list[zoom-3].matrix_height * 2
         zmd_list.append(zmd)
     return zmd_list
 
