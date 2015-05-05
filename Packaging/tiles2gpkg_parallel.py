@@ -32,14 +32,20 @@ Version:
 """
 
 from glob import glob
+try:
+    from cStringIO import StringIO as ioBuffer
+except ImportError:
+    from io import BytesIO as ioBuffer
 from time import sleep
 from uuid import uuid4
 from sys import stdout
-from cStringIO import StringIO
+from sys import version_info
+if version_info[0] == 3:
+    xrange = range
 from operator import attrgetter
 from sqlite3 import connect, Error
-from sqlite3 import Binary as sbinary
 from argparse import ArgumentParser
+from sqlite3 import Binary as sbinary
 from os import walk, remove
 from os.path import split, join, exists
 from multiprocessing import cpu_count, Pool
@@ -452,7 +458,8 @@ class ZoomMetadata(object):
     @property
     def matrix_width(self):
         """Number of tiles wide this matrix should be."""
-        return (self.__matrix_width if hasattr(self, 'matrix_width') else None)
+        #return (self.__matrix_width if hasattr(self, 'matrix_width') else None)
+        return self.__matrix_width or None
 
     @matrix_width.setter
     def matrix_width(self, value):
@@ -474,7 +481,7 @@ class Geopackage(object):
 
     def __init__(self, file_path, srs):
         """Constructor."""
-        self.__db = connect(file_path)
+        self.__file_path = file_path
         self.__srs = srs
         if self.__srs == 3857:
             self.__projection = Mercator()
@@ -484,307 +491,296 @@ class Geopackage(object):
             self.__projection = ScaledWorldMercator()
         else:
             self.__projection = Geodetic()
+        self.db_con = connect(self.__file_path)
         self.__create_schema()
-        self.__file_path = file_path
-        self.close()
 
     def __create_schema(self):
         """Create default geopackage schema on the database."""
-        self.__db.execute("""
-            CREATE TABLE gpkg_contents (
-                table_name TEXT NOT NULL PRIMARY KEY,
-                data_type TEXT NOT NULL,
-                identifier TEXT UNIQUE,
-                description TEXT DEFAULT '',
-                last_change DATETIME NOT NULL DEFAULT
-                (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-                min_x DOUBLE,
-                min_y DOUBLE,
-                max_x DOUBLE,
-                max_y DOUBLE,
-                srs_id INTEGER,
-                CONSTRAINT fk_gc_r_srs_id FOREIGN KEY (srs_id)
-                    REFERENCES gpkg_spatial_ref_sys(srs_id));
-        """)
-        self.__db.execute("""
-            CREATE TABLE gpkg_spatial_ref_sys (
-                srs_name TEXT NOT NULL,
-                srs_id INTEGER NOT NULL PRIMARY KEY,
-                organization TEXT NOT NULL,
-                organization_coordsys_id INTEGER NOT NULL,
-                definition TEXT NOT NULL,
-                description TEXT);
-        """)
-        self.__db.execute("""
-            CREATE TABLE gpkg_tile_matrix (
-                table_name TEXT NOT NULL,
-                zoom_level INTEGER NOT NULL,
-                matrix_width INTEGER NOT NULL,
-                matrix_height INTEGER NOT NULL,
-                tile_width INTEGER NOT NULL,
-                tile_height INTEGER NOT NULL,
-                pixel_x_size DOUBLE NOT NULL,
-                pixel_y_size DOUBLE NOT NULL,
-                CONSTRAINT pk_ttm PRIMARY KEY (table_name, zoom_level),
-                CONSTRAINT fk_ttm_table_name FOREIGN KEY (table_name)
-                    REFERENCES gpkg_contents(table_name));
-        """)
-        self.__db.execute("""
-            CREATE TABLE gpkg_tile_matrix_set (
-                table_name TEXT NOT NULL PRIMARY KEY,
-                srs_id INTEGER NOT NULL,
-                min_x DOUBLE NOT NULL,
-                min_y DOUBLE NOT NULL,
-                max_x DOUBLE NOT NULL,
-                max_y DOUBLE NOT NULL,
-                CONSTRAINT fk_gtms_table_name FOREIGN KEY (table_name)
-                    REFERENCES gpkg_contents(table_name),
-                CONSTRAINT fk_gtms_srs FOREIGN KEY (srs_id)
-                    REFERENCES gpkg_spatial_ref_sys(srs_id));
-        """)
-        self.__db.execute("""
-            CREATE TABLE tiles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                zoom_level INTEGER NOT NULL,
-                tile_column INTEGER NOT NULL,
-                tile_row INTEGER NOT NULL,
-                tile_data BLOB NOT NULL,
-                UNIQUE (zoom_level, tile_column, tile_row));
-        """)
-        self.__db.execute("pragma foreign_keys = 1;")
-        # Insert EPSG values for tiles table
-        wkt = """
-            PROJCS["WGS 84 / Pseudo-Mercator",GEOGCS["WGS 84",DATUM["WGS_1984"
-            ,SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]]
-            ,AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG",
-            "8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]]
-            ,AUTHORITY["EPSG","9122"]]AUTHORITY["EPSG","4326"]],PROJECTION[
-            "Mercator_1SP"],PARAMETER["central_meridian",0],PARAMETER[
-            "scale_factor",1],PARAMETER["false_easting",0],PARAMETER[
-            "false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS[
-            "X",EAST],AXIS["Y",NORTH]
-        """
-        self.__db.execute("""
-            INSERT INTO gpkg_spatial_ref_sys (
-                srs_id,
-                organization,
-                organization_coordsys_id,
-                srs_name,
-                definition)
-            VALUES (3857, ?, 3857, ?, ?)
-        """, ("epsg", "WGS 84 / Pseudo-Mercator", wkt))
-        wkt = """
-            GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,
-            298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG",
-            "6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT
-            ["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],
-            AUTHORITY["EPSG","4326"]]
-        """
-        self.__db.execute("""
-            INSERT INTO gpkg_spatial_ref_sys (
-                srs_id,
-                organization,
-                organization_coordsys_id,
-                srs_name,
-                definition)
-            VALUES (4326, ?, 4326, ?, ?)
-        """, ("epsg", "WGS 84", wkt))
-        wkt = """
-            PROJCS["WGS 84 / World Mercator",GEOGCS["WGS 84",
-            DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,
-            AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],
-            PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],
-            UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],
-            AUTHORITY["EPSG","4326"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],
-            PROJECTION["Mercator_1SP"],PARAMETER["central_meridian",0],
-            PARAMETER["scale_factor",1],PARAMETER["false_easting",0],
-            PARAMETER["false_northing",0],AUTHORITY["EPSG","3395"],
-            AXIS["Easting",EAST],AXIS["Northing",NORTH]]
-        """
-        self.__db.execute("""
-            INSERT INTO gpkg_spatial_ref_sys (
-                srs_id,
-                organization,
-                organization_coordsys_id,
-                srs_name,
-                definition)
-            VALUES (3395, ?, 3395, ?, ?)
-        """, ("epsg", "WGS 84 / World Mercator", wkt))
-        wkt = """
-            PROJCS["unnamed",GEOGCS["WGS 84",
-            DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,
-            AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],
-            PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433],
-            AUTHORITY["EPSG","4326"]],PROJECTION["Mercator_1SP"],
-            PARAMETER["central_meridian",0],
-            PARAMETER["scale_factor",0.803798909747978],
-            PARAMETER["false_easting",0],
-            PARAMETER["false_northing",0],
-            UNIT["metre",1,AUTHORITY["EPSG","9001"]]]
-        """
-        self.__db.execute("""
-            INSERT INTO gpkg_spatial_ref_sys (
-                srs_id,
-                organization,
-                organization_coordsys_id,
-                srs_name,
-                definition)
-            VALUES (9804, ?, 9804, ?, ?)
-        """, ("epsg", "WGS 84 / Scaled World Mercator", wkt))
-        wkt = """undefined"""
-        self.__db.execute("""
-            INSERT INTO gpkg_spatial_ref_sys (
-                srs_id,
-                organization,
-                organization_coordsys_id,
-                srs_name,
-                definition)
-            VALUES (-1, ?, -1, ?, ?)
-        """, ("NONE", " ", wkt))
-        self.__db.execute("""
-            INSERT INTO gpkg_spatial_ref_sys (
-                srs_id,
-                organization,
-                organization_coordsys_id,
-                srs_name,
-                definition)
-            VALUES (0, ?, 0, ?, ?)
-        """, ("NONE", " ", wkt))
-        self.__db.execute("""
-            INSERT INTO gpkg_contents (
-                table_name,
-                data_type,
-                identifier,
-                description,
-                min_x,
-                max_x,
-                min_y,
-                max_y,
-                srs_id)
-            VALUES (?, ?, ?, ?, 0, 0, 0, 0, ?);
-        """, ("tiles", "tiles", "Raster Tiles",
-                "Created by tiles2gpkg_parallel.py, written by S. Lander",
-                self.__srs))
-        # Add GP10 to the Sqlite header
-        self.__db.execute("pragma application_id = 1196437808;")
-        self.__db.commit()
+        with self.db_con as db_con:
+            cursor = db_con.cursor()
+            cursor.execute("""
+                CREATE TABLE gpkg_contents (
+                    table_name TEXT NOT NULL PRIMARY KEY,
+                    data_type TEXT NOT NULL,
+                    identifier TEXT UNIQUE,
+                    description TEXT DEFAULT '',
+                    last_change DATETIME NOT NULL DEFAULT
+                    (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                    min_x DOUBLE,
+                    min_y DOUBLE,
+                    max_x DOUBLE,
+                    max_y DOUBLE,
+                    srs_id INTEGER,
+                    CONSTRAINT fk_gc_r_srs_id FOREIGN KEY (srs_id)
+                        REFERENCES gpkg_spatial_ref_sys(srs_id));
+            """)
+            cursor.execute("""
+                CREATE TABLE gpkg_spatial_ref_sys (
+                    srs_name TEXT NOT NULL,
+                    srs_id INTEGER NOT NULL PRIMARY KEY,
+                    organization TEXT NOT NULL,
+                    organization_coordsys_id INTEGER NOT NULL,
+                    definition TEXT NOT NULL,
+                    description TEXT);
+            """)
+            cursor.execute("""
+                CREATE TABLE gpkg_tile_matrix (
+                    table_name TEXT NOT NULL,
+                    zoom_level INTEGER NOT NULL,
+                    matrix_width INTEGER NOT NULL,
+                    matrix_height INTEGER NOT NULL,
+                    tile_width INTEGER NOT NULL,
+                    tile_height INTEGER NOT NULL,
+                    pixel_x_size DOUBLE NOT NULL,
+                    pixel_y_size DOUBLE NOT NULL,
+                    CONSTRAINT pk_ttm PRIMARY KEY (table_name, zoom_level),
+                    CONSTRAINT fk_ttm_table_name FOREIGN KEY (table_name)
+                        REFERENCES gpkg_contents(table_name));
+            """)
+            cursor.execute("""
+                CREATE TABLE gpkg_tile_matrix_set (
+                    table_name TEXT NOT NULL PRIMARY KEY,
+                    srs_id INTEGER NOT NULL,
+                    min_x DOUBLE NOT NULL,
+                    min_y DOUBLE NOT NULL,
+                    max_x DOUBLE NOT NULL,
+                    max_y DOUBLE NOT NULL,
+                    CONSTRAINT fk_gtms_table_name FOREIGN KEY (table_name)
+                        REFERENCES gpkg_contents(table_name),
+                    CONSTRAINT fk_gtms_srs FOREIGN KEY (srs_id)
+                        REFERENCES gpkg_spatial_ref_sys(srs_id));
+            """)
+            cursor.execute("""
+                CREATE TABLE tiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    zoom_level INTEGER NOT NULL,
+                    tile_column INTEGER NOT NULL,
+                    tile_row INTEGER NOT NULL,
+                    tile_data BLOB NOT NULL,
+                    UNIQUE (zoom_level, tile_column, tile_row));
+            """)
+            cursor.execute("pragma foreign_keys = 1;")
+            # Insert EPSG values for tiles table
+            wkt = """
+                PROJCS["WGS 84 / Pseudo-Mercator",GEOGCS["WGS 84",DATUM["WGS_1984"
+                ,SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]]
+                ,AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG",
+                "8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]]
+                ,AUTHORITY["EPSG","9122"]]AUTHORITY["EPSG","4326"]],PROJECTION[
+                "Mercator_1SP"],PARAMETER["central_meridian",0],PARAMETER[
+                "scale_factor",1],PARAMETER["false_easting",0],PARAMETER[
+                "false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS[
+                "X",EAST],AXIS["Y",NORTH]
+            """
+            cursor.execute("""
+                INSERT INTO gpkg_spatial_ref_sys (
+                    srs_id,
+                    organization,
+                    organization_coordsys_id,
+                    srs_name,
+                    definition)
+                VALUES (3857, ?, 3857, ?, ?)
+            """, ("epsg", "WGS 84 / Pseudo-Mercator", wkt))
+            wkt = """
+                GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,
+                298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG",
+                "6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT
+                ["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],
+                AUTHORITY["EPSG","4326"]]
+            """
+            cursor.execute("""
+                INSERT INTO gpkg_spatial_ref_sys (
+                    srs_id,
+                    organization,
+                    organization_coordsys_id,
+                    srs_name,
+                    definition)
+                VALUES (4326, ?, 4326, ?, ?)
+            """, ("epsg", "WGS 84", wkt))
+            wkt = """
+                PROJCS["WGS 84 / World Mercator",GEOGCS["WGS 84",
+                DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,
+                AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],
+                PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],
+                UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],
+                AUTHORITY["EPSG","4326"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],
+                PROJECTION["Mercator_1SP"],PARAMETER["central_meridian",0],
+                PARAMETER["scale_factor",1],PARAMETER["false_easting",0],
+                PARAMETER["false_northing",0],AUTHORITY["EPSG","3395"],
+                AXIS["Easting",EAST],AXIS["Northing",NORTH]]
+            """
+            cursor.execute("""
+                INSERT INTO gpkg_spatial_ref_sys (
+                    srs_id,
+                    organization,
+                    organization_coordsys_id,
+                    srs_name,
+                    definition)
+                VALUES (3395, ?, 3395, ?, ?)
+            """, ("epsg", "WGS 84 / World Mercator", wkt))
+            wkt = """
+                PROJCS["unnamed",GEOGCS["WGS 84",
+                DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,
+                AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],
+                PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433],
+                AUTHORITY["EPSG","4326"]],PROJECTION["Mercator_1SP"],
+                PARAMETER["central_meridian",0],
+                PARAMETER["scale_factor",0.803798909747978],
+                PARAMETER["false_easting",0],
+                PARAMETER["false_northing",0],
+                UNIT["metre",1,AUTHORITY["EPSG","9001"]]]
+            """
+            cursor.execute("""
+                INSERT INTO gpkg_spatial_ref_sys (
+                    srs_id,
+                    organization,
+                    organization_coordsys_id,
+                    srs_name,
+                    definition)
+                VALUES (9804, ?, 9804, ?, ?)
+            """, ("epsg", "WGS 84 / Scaled World Mercator", wkt))
+            wkt = """undefined"""
+            cursor.execute("""
+                INSERT INTO gpkg_spatial_ref_sys (
+                    srs_id,
+                    organization,
+                    organization_coordsys_id,
+                    srs_name,
+                    definition)
+                VALUES (-1, ?, -1, ?, ?)
+            """, ("NONE", " ", wkt))
+            cursor.execute("""
+                INSERT INTO gpkg_spatial_ref_sys (
+                    srs_id,
+                    organization,
+                    organization_coordsys_id,
+                    srs_name,
+                    definition)
+                VALUES (0, ?, 0, ?, ?)
+            """, ("NONE", " ", wkt))
+            cursor.execute("""
+                INSERT INTO gpkg_contents (
+                    table_name,
+                    data_type,
+                    identifier,
+                    description,
+                    min_x,
+                    max_x,
+                    min_y,
+                    max_y,
+                    srs_id)
+                VALUES (?, ?, ?, ?, 0, 0, 0, 0, ?);
+            """, ("tiles", "tiles", "Raster Tiles",
+                    "Created by tiles2gpkg_parallel.py, written by S. Lander",
+                    self.__srs))
+            # Add GP10 to the Sqlite header
+            cursor.execute("pragma application_id = 1196437808;")
 
     @property
     def file_path(self):
         """Return the path of the geopackage database on the file system."""
         return self.__file_path
 
-    @property
-    def db(self):
-        """Return the path of the geopackage database on the file system."""
-        return self.__db
-
     def update_metadata(self, metadata):
         """Update the metadata of the geopackage database after tile merge."""
         # initialize a new projection
-        self.open()
-        cur = self.__db.cursor()
-        tile_matrix_stmt = """
-                INSERT OR REPLACE INTO gpkg_tile_matrix (
+        with self.db_con as db_con:
+            cursor = db_con.cursor()
+            tile_matrix_stmt = """
+                    INSERT OR REPLACE INTO gpkg_tile_matrix (
+                        table_name,
+                        zoom_level,
+                        matrix_width,
+                        matrix_height,
+                        tile_width,
+                        tile_height,
+                        pixel_x_size,
+                        pixel_y_size)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            """
+            # iterate through each zoom level object and assign
+            # matrix data to table
+            for level in metadata:
+                cursor.execute(tile_matrix_stmt, (
+                    "tiles", level.zoom, level.matrix_width, level.matrix_height,
+                    self.__projection.tile_size, self.__projection.tile_size,
+                    self.__projection.pixel_size(level.zoom),
+                    self.__projection.pixel_size(level.zoom)))
+            contents_stmt = """
+                UPDATE gpkg_contents SET
+                    min_x = ?,
+                    min_y = ?,
+                    max_x = ?,
+                    max_y = ?
+                WHERE table_name = 'tiles';
+            """
+            tile_matrix_set_stmt = """
+                INSERT OR REPLACE INTO gpkg_tile_matrix_set (
                     table_name,
-                    zoom_level,
-                    matrix_width,
-                    matrix_height,
-                    tile_width,
-                    tile_height,
-                    pixel_x_size,
-                    pixel_y_size)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-        """
-        # iterate through each zoom level object and assign
-        # matrix data to table
-        for level in metadata:
-            cur.execute(tile_matrix_stmt, (
-                "tiles", level.zoom, level.matrix_width, level.matrix_height,
-                self.__projection.tile_size, self.__projection.tile_size,
-                self.__projection.pixel_size(level.zoom),
-                self.__projection.pixel_size(level.zoom)))
-        contents_stmt = """
-            UPDATE gpkg_contents SET
-                min_x = ?,
-                min_y = ?,
-                max_x = ?,
-                max_y = ?
-            WHERE table_name = 'tiles';
-        """
-        tile_matrix_set_stmt = """
-            INSERT OR REPLACE INTO gpkg_tile_matrix_set (
-                table_name,
-                srs_id,
-                min_x,
-                min_y,
-                max_x,
-                max_y)
-            VALUES (?, ?, ?, ?, ?, ?);
-        """
-        # get bounding box info based on
-        top_level = min(metadata, key=attrgetter('zoom'))
-        #top_level.min_x = self.__projection.truncate(top_level.min_x)
-        #top_level.min_y = self.__projection.truncate(top_level.min_y)
-        #top_level.max_x = self.__projection.truncate(top_level.max_x)
-        #top_level.max_y = self.__projection.truncate(top_level.max_y)
-        top_level.min_x = top_level.min_x
-        top_level.min_y = top_level.min_y
-        top_level.max_x = top_level.max_x
-        top_level.max_y = top_level.max_y
-        # write bounds and matrix set info to table
-        cur.execute(contents_stmt, (top_level.min_x, top_level.min_y,
-            top_level.max_x, top_level.max_y))
-        cur.execute(tile_matrix_set_stmt, ('tiles', self.__srs, top_level.min_x,
-            top_level.min_y, top_level.max_x, top_level.max_y))
-        self.__db.commit()
-        cur.close()
-        self.close()
+                    srs_id,
+                    min_x,
+                    min_y,
+                    max_x,
+                    max_y)
+                VALUES (?, ?, ?, ?, ?, ?);
+            """
+            # get bounding box info based on
+            top_level = min(metadata, key=attrgetter('zoom'))
+            #top_level.min_x = self.__projection.truncate(top_level.min_x)
+            #top_level.min_y = self.__projection.truncate(top_level.min_y)
+            #top_level.max_x = self.__projection.truncate(top_level.max_x)
+            #top_level.max_y = self.__projection.truncate(top_level.max_y)
+            top_level.min_x = top_level.min_x
+            top_level.min_y = top_level.min_y
+            top_level.max_x = top_level.max_x
+            top_level.max_y = top_level.max_y
+            # write bounds and matrix set info to table
+            cursor.execute(contents_stmt, (top_level.min_x, top_level.min_y,
+                top_level.max_x, top_level.max_y))
+            cursor.execute(tile_matrix_set_stmt, ('tiles', self.__srs, top_level.min_x,
+                top_level.min_y, top_level.max_x, top_level.max_y))
 
     def execute(self, statement, inputs=None):
         """Execute a prepared SQL statement on this geopackage database."""
-        self.open()
-        cur = self.__db.cursor()
-        if inputs is not None:
-            result_cursor = cur.execute(statement, inputs)
-        else:
-            result_cursor = cur.execute(statement)
-        return result_cursor
+        with self.db_con as db_con:
+            cursor = db_con.cursor()
+            if inputs is not None:
+                result_cursor = cursor.execute(statement, inputs)
+            else:
+                result_cursor = cursor.execute(statement)
+            return result_cursor
 
     def assimilate(self, source):
         """Assimilate .gpkg.part tiles into this geopackage database."""
-        self.open()
-        self.__db.execute("pragma synchronous = off;")
-        self.__db.execute("pragma journal_mode = off;")
-        self.__db.execute("pragma page_size = 65536;")
-        #print "Merging", source, "into", self.__file_path, "..."
-        query = "attach '" + source + "' as source;"
-        self.__db.execute(query)
-        try:
-            self.__db.execute("""INSERT OR REPLACE INTO tiles
-            (zoom_level, tile_column, tile_row, tile_data)
-            SELECT zoom_level, tile_column, tile_row, tile_data
-            FROM source.tiles;""")
-            self.__db.execute("detach source;")
-        except Error as err:
-            print "Error:", type(err)
-            print "Error msg:", err
-            raise
-        finally:
-            self.close()
-        remove(source)
-
-    def open(self):
-        """Open this geopackage database for writing."""
-        if self.__db is not None:
-            self.close()
-        self.__db = connect(self.__file_path)
+        if not exists(source):
+            raise IOError
+        with self.db_con as db_con:
+            cursor = db_con.cursor()
+            cursor.execute("pragma synchronous = off;")
+            cursor.execute("pragma journal_mode = off;")
+            cursor.execute("pragma page_size = 65536;")
+            #print "Merging", source, "into", self.__file_path, "..."
+            query = "attach '" + source + "' as source;"
+            cursor.execute(query)
+            try:
+                cursor.execute("""INSERT OR REPLACE INTO tiles
+                (zoom_level, tile_column, tile_row, tile_data)
+                SELECT zoom_level, tile_column, tile_row, tile_data
+                FROM source.tiles;""")
+                cursor.execute("detach source;")
+            except Error as err:
+                print("Error: {}".format(type(err)))
+                print("Error msg:".format(err))
+                raise
+            remove(source)
 
     def close(self):
-        """Close this geopackage database."""
-        self.__db.close()
+        """
+        Closes the sqlite3 db handle for this object.
+        """
+        self.db_con.close()
 
-
+ 
 class TempDB(object):
     """
     Returns a temporary sqlite database to hold tiles for async workers.
@@ -800,37 +796,39 @@ class TempDB(object):
         """
         uid = uuid4()
         self.name = uid.hex + '.gpkg.part'
-        filename = join(filename, self.name)
-        self.db = connect(filename)
-        self.cursor = self.db.cursor()
-        stmt = """
-            CREATE TABLE tiles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            zoom_level INTEGER NOT NULL,
-            tile_column INTEGER NOT NULL,
-            tile_row INTEGER NOT NULL,
-            tile_data BLOB NOT NULL,
-            UNIQUE (zoom_level, tile_column, tile_row));
-        """
-        self.cursor.execute(stmt)
-        # Enable pragma for fast sqlite creation
-        self.cursor.execute("pragma synchronous = off;")
-        self.cursor.execute("pragma journal_mode = off;")
-        self.cursor.execute("pragma page_size = 80000;")
-        self.cursor.execute("pragma foreign_keys = 1;")
+        self.__file_path = join(filename, self.name)
+        self.db_con = connect(self.__file_path)
+        with self.db_con as db_con:
+            cursor = db_con.cursor()
+            stmt = """
+                CREATE TABLE tiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                zoom_level INTEGER NOT NULL,
+                tile_column INTEGER NOT NULL,
+                tile_row INTEGER NOT NULL,
+                tile_data BLOB NOT NULL,
+                UNIQUE (zoom_level, tile_column, tile_row));
+            """
+            cursor.execute(stmt)
+            # Enable pragma for fast sqlite creation
+            cursor.execute("pragma synchronous = off;")
+            cursor.execute("pragma journal_mode = off;")
+            cursor.execute("pragma page_size = 80000;")
+            cursor.execute("pragma foreign_keys = 1;")
         self.image_blob_stmt = """
             INSERT INTO tiles
                 (zoom_level, tile_column, tile_row, tile_data)
                 VALUES (?,?,?,?)
         """
-        self.db.commit()
 
-    def close(self):
-        """
-        Closes the sqlite3 cursor and db if they are open.
-        """
-        self.cursor.close()
-        self.db.close()
+    def execute(self, statement, inputs=None):
+        with self.db_con as db_con:
+            cursor = db_con.cursor()
+            if inputs is not None:
+                result_cursor = cursor.execute(statement, inputs)
+            else:
+                result_cursor = cursor.execute(statement)
+            return result_cursor
 
     def insert_image_blob(self, z, x, y, data):
         """
@@ -843,8 +841,15 @@ class TempDB(object):
         y -- the column number of the data
         data -- the image data containing in a binary array
         """
-        self.cursor.execute(self.image_blob_stmt, (z, x, y, data))
-        self.db.commit()
+        with self.db_con as db_con:
+            cursor = db_con.cursor()
+            cursor.execute(self.image_blob_stmt, (z, x, y, data))
+
+    def close(self):
+        """
+        Closes this sqlite3 database handle.
+        """
+        self.db_con.close()
 
 
 def img_to_buf(img, img_type, jpeg_quality=75):
@@ -858,7 +863,7 @@ def img_to_buf(img, img_type, jpeg_quality=75):
     img_type -- the MIME type of the image (JPG, PNG)
     """
     defaults = {}
-    buf = StringIO()
+    buf = ioBuffer()
     if img_type == 'jpeg':
         img.convert('RGB')
         # Hardcoding a default compression of 75% for JPEGs
@@ -918,14 +923,14 @@ def file_count(base_dir):
     A list of dictionary objects containing the full file path and TMS
     coordinates of the image tile.
     """
-    print "Calculating number of tiles, this could take a while..."
+    print("Calculating number of tiles, this could take a while...")
     file_list = []
     # Avoiding dots (functional references) will increase performance of
     #  the loop because they will not be reevaluated each iteration.
     for root, sub_folders, files in walk(base_dir):
         temp_list = [join(root, f) for f in files if f.endswith(IMAGE_TYPES)]
         file_list += temp_list
-    print "Found", len(file_list), "total tiles."
+    print("Found {} total tiles.".format(len(file_list)))
     return [split_all(item) for item in file_list]
 
 
@@ -978,7 +983,7 @@ def worker_map(temp_db, tile_dict, extra_args, invert_y):
         y_column = tile_dict['y'] - level.min_tile_col
     if IOPEN is not None:
         img = IOPEN(tile_dict['path'], 'r')
-        data = StringIO()
+        data = ioBuffer()
         if imagery == 'mixed':
             if img_has_transparency(img):
                 data = img_to_buf(img, 'png', jpeg_quality).read()
@@ -1029,12 +1034,12 @@ def allocate(cores, pool, file_list, extra_args):
     not, then N is the largest factor of 8 that is still less than C.
     """
     if cores is 1:
-        print "Spawning worker with", len(file_list), "files"
+        print("Spawning worker with {} files".format(len(file_list)))
         return [pool.apply_async(sqlite_worker, [file_list, extra_args])]
     else:
         files = len(file_list)
-        head = allocate(cores/2, pool, file_list[:files/2], extra_args)
-        tail = allocate(cores/2, pool, file_list[files/2:], extra_args)
+        head = allocate(int(cores/2), pool, file_list[:int(files/2)], extra_args)
+        tail = allocate(int(cores/2), pool, file_list[int(files/2):], extra_args)
         return head + tail
 
 
@@ -1146,7 +1151,7 @@ def combine_worker_dbs(out_geopackage):
         base_dir = "."
     glob_path = join(base_dir + '/*.gpkg.part')
     file_list = glob(glob_path)
-    print "Merging temporary databases..."
+    print("Merging temporary databases...")
     #[out_geopackage.assimilate(f) for f in file_list]
     itr = len(file_list)
     status = ["|", "/", "-", "\\"]
@@ -1164,7 +1169,7 @@ def combine_worker_dbs(out_geopackage):
             counter += 1
         else:
             counter = 0
-    print " All geopackages merged!"
+    print(" All geopackages merged!")
 
 
 def main(arg_list):
@@ -1180,7 +1185,7 @@ def main(arg_list):
     files = file_count(arg_list.source_folder)
     if len(files) == 0:
         # If there are no files, exit the script
-        print " Ensure the correct source tile directory was specified."
+        print(" Ensure the correct source tile directory was specified.")
         exit(1)
     # Is the input tile grid aligned to lower-left or not?
     lower_left = arg_list.tileorigin == 'll' or arg_list.tileorigin == 'sw'
@@ -1201,25 +1206,30 @@ def main(arg_list):
         results = allocate(cores, pool, files, extra_args)
         status = ["|", "/", "-", "\\"]
         counter = 0
-        while True:
-            rem = sum([1 for item in results if not item.ready()])
-            if rem == 0:
-                stdout.write("\r[X] Progress: [" + "=="*(cores-rem) +
-                        "  "*rem + "]")
-                stdout.flush()
-                print " All Done!"
-                break
-            else:
-                stdout.write("\r[" + status[counter] + "] Progress: [" +
-                        "=="*(cores-rem) + "  "*rem + "]")
-                stdout.flush()
-                if counter != len(status)-1:
-                    counter += 1
+        try:
+            while True:
+                rem = sum([1 for item in results if not item.ready()])
+                if rem == 0:
+                    stdout.write("\r[X] Progress: [" + "=="*(cores-rem) +
+                            "  "*rem + "]")
+                    stdout.flush()
+                    print(" All Done!")
+                    break
                 else:
-                    counter = 0
-            sleep(.25)
-        pool.close()
-        pool.join()
+                    stdout.write("\r[" + status[counter] + "] Progress: [" +
+                            "=="*(cores-rem) + "  "*rem + "]")
+                    stdout.flush()
+                    if counter != len(status)-1:
+                        counter += 1
+                    else:
+                        counter = 0
+                sleep(.25)
+            pool.close()
+            pool.join()
+        except KeyboardInterrupt:
+            print(" Interrupted!")
+            pool.terminate()
+            exit(1)
     else:
         # Debugging call to bypass multiprocessing (-T)
         extra_args = dict(root_dir=root_dir, tile_info=tile_info,
@@ -1230,15 +1240,16 @@ def main(arg_list):
     combine_worker_dbs(output_geopackage)
     # Using the data in the output file, create the metadata for it
     output_geopackage.update_metadata(tile_info)
-    print "Complete"
+    output_geopackage.close()
+    print("Complete")
 
 if __name__ == '__main__':
-    print """
+    print("""
         tiles2gpkg_parallel.py  Copyright (C) 2014  Reinventing Geospatial, Inc
         This program comes with ABSOLUTELY NO WARRANTY.
         This is free software, and you are welcome to redistribute it
         under certain conditions.
-    """
+    """)
     PARSER = ArgumentParser(description="Convert TMS folder into geopackage")
     PARSER.add_argument("source_folder", metavar="source",
             help="Source folder of TMS files.")
@@ -1265,10 +1276,10 @@ if __name__ == '__main__':
     ARG_LIST = PARSER.parse_args()
     if not exists(ARG_LIST.source_folder) or exists(ARG_LIST.output_file):
         PARSER.print_usage()
-        print "Ensure that TMS directory exists and out file does not."
+        print("Ensure that TMS directory exists and out file does not.")
         exit(1)
     if ARG_LIST.q is not None and ARG_LIST.imagery == 'png':
         PARSER.print_usage()
-        print "-q cannot be used with png"
+        print("-q cannot be used with png")
         exit(1)
     main(ARG_LIST)
