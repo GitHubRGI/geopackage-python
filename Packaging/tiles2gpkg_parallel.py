@@ -495,12 +495,12 @@ class Geopackage(object):
             self.__projection = ScaledWorldMercator()
         else:
             self.__projection = Geodetic()
-        self.db_con = connect(self.__file_path)
+        self.__db_con = connect(self.__file_path)
         self.__create_schema()
 
     def __create_schema(self):
         """Create default geopackage schema on the database."""
-        with self.db_con as db_con:
+        with self.__db_con as db_con:
             cursor = db_con.cursor()
             cursor.execute("""
                 CREATE TABLE gpkg_contents (
@@ -688,7 +688,7 @@ class Geopackage(object):
     def update_metadata(self, metadata):
         """Update the metadata of the geopackage database after tile merge."""
         # initialize a new projection
-        with self.db_con as db_con:
+        with self.__db_con as db_con:
             cursor = db_con.cursor()
             tile_matrix_stmt = """
                     INSERT OR REPLACE INTO gpkg_tile_matrix (
@@ -746,7 +746,7 @@ class Geopackage(object):
 
     def execute(self, statement, inputs=None):
         """Execute a prepared SQL statement on this geopackage database."""
-        with self.db_con as db_con:
+        with self.__db_con as db_con:
             cursor = db_con.cursor()
             if inputs is not None:
                 result_cursor = cursor.execute(statement, inputs)
@@ -758,7 +758,7 @@ class Geopackage(object):
         """Assimilate .gpkg.part tiles into this geopackage database."""
         if not exists(source):
             raise IOError
-        with self.db_con as db_con:
+        with self.__db_con as db_con:
             cursor = db_con.cursor()
             cursor.execute("pragma synchronous = off;")
             cursor.execute("pragma journal_mode = off;")
@@ -780,7 +780,7 @@ class Geopackage(object):
 
     def __exit__(self, type, value, traceback):
         """Resource cleanup on destruction."""
-        self.db_con.close()
+        self.__db_con.close()
 
  
 class TempDB(object):
@@ -788,6 +788,10 @@ class TempDB(object):
     Returns a temporary sqlite database to hold tiles for async workers.
     Has a <filename>.gpkg.part file format.
     """
+
+    def __enter__(self):
+        """With-statement caller."""
+        return self
 
     def __init__(self, filename):
         """
@@ -799,8 +803,8 @@ class TempDB(object):
         uid = uuid4()
         self.name = uid.hex + '.gpkg.part'
         self.__file_path = join(filename, self.name)
-        self.db_con = connect(self.__file_path)
-        with self.db_con as db_con:
+        self.__db_con = connect(self.__file_path)
+        with self.__db_con as db_con:
             cursor = db_con.cursor()
             stmt = """
                 CREATE TABLE tiles (
@@ -824,7 +828,7 @@ class TempDB(object):
         """
 
     def execute(self, statement, inputs=None):
-        with self.db_con as db_con:
+        with self.__db_con as db_con:
             cursor = db_con.cursor()
             if inputs is not None:
                 result_cursor = cursor.execute(statement, inputs)
@@ -843,15 +847,13 @@ class TempDB(object):
         y -- the column number of the data
         data -- the image data containing in a binary array
         """
-        with self.db_con as db_con:
+        with self.__db_con as db_con:
             cursor = db_con.cursor()
             cursor.execute(self.image_blob_stmt, (z, x, y, data))
 
-    def close(self):
-        """
-        Closes this sqlite3 database handle.
-        """
-        self.db_con.close()
+    def __exit__(self, type, value, traceback):
+        """Resource cleanup on destruction."""
+        self.__db_con.close()
 
 
 def img_to_buf(img, img_type, jpeg_quality=75):
@@ -1015,18 +1017,18 @@ def sqlite_worker(file_list, extra_args):
                 the tiles in the TMS directory
     """
     temp_db = TempDB(extra_args['root_dir'])
-    invert_y = None
-    if extra_args['lower_left']:
-        if extra_args['srs'] == 3857:
-            invert_y = Mercator.invert_y
-        elif extra_args['srs'] == 4326:
-            invert_y = Geodetic.invert_y
-        elif extra_args['srs'] == 3395:
-            invert_y = EllipsoidalMercator.invert_y
-        elif extra_args['srs'] == 9804:
-            invert_y = ScaledWorldMercator.invert_y
-    [worker_map(temp_db, item, extra_args, invert_y) for item in file_list]
-    temp_db.close()
+    with TempDB(extra_args['root_dir']) as temp_db:
+        invert_y = None
+        if extra_args['lower_left']:
+            if extra_args['srs'] == 3857:
+                invert_y = Mercator.invert_y
+            elif extra_args['srs'] == 4326:
+                invert_y = Geodetic.invert_y
+            elif extra_args['srs'] == 3395:
+                invert_y = EllipsoidalMercator.invert_y
+            elif extra_args['srs'] == 9804:
+                invert_y = ScaledWorldMercator.invert_y
+        [worker_map(temp_db, item, extra_args, invert_y) for item in file_list]
 
 
 def allocate(cores, pool, file_list, extra_args):
