@@ -1196,53 +1196,53 @@ def main(arg_list):
     # Build the tile matrix info object
     tile_info = build_lut(files, lower_left, arg_list.srs)
     # Initialize the output file
-    with Geopackage(arg_list.output_file, arg_list.srs) as gpkg:
-        if arg_list.threading:
-            # Enable tiling on multiple CPU cores
-            cores = cpu_count()
-            pool = Pool(cores)
-            # Build allocate dictionary
-            extra_args = dict(root_dir=root_dir, tile_info=tile_info,
-                    lower_left=lower_left, srs=arg_list.srs,
-                    imagery=arg_list.imagery, jpeg_quality=arg_list.q)
-            results = allocate(cores, pool, files, extra_args)
-            status = ["|", "/", "-", "\\"]
-            counter = 0
-            try:
-                while True:
-                    rem = sum([1 for item in results if not item.ready()])
-                    if rem == 0:
-                        stdout.write("\r[X] Progress: [" + "=="*(cores-rem) +
-                                "  "*rem + "]")
-                        stdout.flush()
-                        print(" All Done!")
-                        break
+    if arg_list.threading:
+        # Enable tiling on multiple CPU cores
+        cores = cpu_count()
+        pool = Pool(cores)
+        # Build allocate dictionary
+        extra_args = dict(root_dir=root_dir, tile_info=tile_info,
+                lower_left=lower_left, srs=arg_list.srs,
+                imagery=arg_list.imagery, jpeg_quality=arg_list.q)
+        results = allocate(cores, pool, files, extra_args)
+        status = ["|", "/", "-", "\\"]
+        counter = 0
+        try:
+            while True:
+                rem = sum([1 for item in results if not item.ready()])
+                if rem == 0:
+                    stdout.write("\r[X] Progress: [" + "=="*(cores-rem) +
+                            "  "*rem + "]")
+                    stdout.flush()
+                    print(" All Done!")
+                    break
+                else:
+                    stdout.write("\r[" + status[counter] + "] Progress: [" +
+                            "=="*(cores-rem) + "  "*rem + "]")
+                    stdout.flush()
+                    if counter != len(status)-1:
+                        counter += 1
                     else:
-                        stdout.write("\r[" + status[counter] + "] Progress: [" +
-                                "=="*(cores-rem) + "  "*rem + "]")
-                        stdout.flush()
-                        if counter != len(status)-1:
-                            counter += 1
-                        else:
-                            counter = 0
-                    sleep(.25)
-                pool.close()
-                pool.join()
-            except KeyboardInterrupt:
-                print(" Interrupted!")
-                pool.terminate()
-                exit(1)
-        else:
-            # Debugging call to bypass multiprocessing (-T)
-            extra_args = dict(root_dir=root_dir, tile_info=tile_info,
-                    lower_left=lower_left, srs=arg_list.srs,
-                    imagery=arg_list.imagery, jpeg_quality=arg_list.q)
-            sqlite_worker(files, extra_args)
-        # Combine the individual temp databases into the output file
+                        counter = 0
+                sleep(.25)
+            pool.close()
+            pool.join()
+        except KeyboardInterrupt:
+            print(" Interrupted!")
+            pool.terminate()
+            exit(1)
+    else:
+        # Debugging call to bypass multiprocessing (-T)
+        extra_args = dict(root_dir=root_dir, tile_info=tile_info,
+                lower_left=lower_left, srs=arg_list.srs,
+                imagery=arg_list.imagery, jpeg_quality=arg_list.q)
+        sqlite_worker(files, extra_args)
+    # Combine the individual temp databases into the output file
+    with Geopackage(arg_list.output_file, arg_list.srs) as gpkg:
         combine_worker_dbs(gpkg)
         # Using the data in the output file, create the metadata for it
         gpkg.update_metadata(tile_info)
-        print("Complete")
+    print("Complete")
 
 if __name__ == '__main__':
     print("""
