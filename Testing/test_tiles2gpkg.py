@@ -461,8 +461,7 @@ class Testgeopackage:
         with Geopackage(session_folder, 3395) as gpkg:
             with raises(IOError):
                 gpkg.assimilate("None")        
-        remove(join(getcwd(), gpkg.file_path))
-        
+        remove(join(getcwd(), gpkg.file_path)) 
 
     def test_execute_return(self):
         session_folder = make_session_folder()
