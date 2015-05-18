@@ -458,10 +458,11 @@ class Testgeopackage:
     def test_assimilate_error(self):
         session_folder = make_session_folder()
         chdir(session_folder)
-        gpkg = Geopackage(session_folder, 3395)
+        with Geopackage(session_folder, 3395) as gpkg:
+            with raises(IOError):
+                gpkg.assimilate("None")
         remove(join(getcwd(), gpkg.file_path))
-        with raises(IOError):
-            gpkg.assimilate("None")
+
 
     def test_execute_return(self):
         session_folder = make_session_folder()
