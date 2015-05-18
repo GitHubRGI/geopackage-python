@@ -22,6 +22,7 @@ Consortium](http://opengeospatial.org/standards/geopackage)
 
 ### Download stable versions
 
+* [Release 5.0 - Archived on 2015-05-06](https://github.com/GitHubRGI/geopackage-python/releases/tag/v5.0) - Python 3.4 support and better SQLite3 resource usage
 * [Release 4.0 - Archived on 2015-04-30](https://github.com/GitHubRGI/geopackage-python/releases/tag/v4.0) - Fix for incorrect tile matrix width and height values
 * [Release 3.0 - Archived on 2015-02-11](https://github.com/GitHubRGI/geopackage-python/archive/geopackage-python_release3.0.zip) - Fix to include proper matrix sizes for height and width in gpkg_tile_matrix when those tiles do not exist
 * [Release 2.0 - Archived on 2015-01-13](https://github.com/GitHubRGI/geopackage-python/archive/geopackage-python_release2.0.zip)
