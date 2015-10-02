@@ -122,6 +122,26 @@ Class is available under the open-source GDAL license (www.gdal.org).
 
 MAXZOOMLEVEL = 32
 
+class ITilingProfile(object):
+    
+    def tile_bounds(self, tileX, tileY, zoom):
+        raise NotImplementedError
+        
+    def tile_lon_lat_bounds(self, tileX, tileY, zoom):
+        raise NotImplementedError
+        
+    def resolution(self, zoom):
+        raise NotImplementedError
+        
+    def zoom_for_pixel_size(self, pixel_size):
+        raise NotImplementedError
+        
+    def upper_left_tile(tx, ty, zoom):
+        raise NotImplementedError
+        
+    def quad_tree(tx, ty, zoom):
+        raise NotImplementedError
+
 class GlobalMercator(object):
     """
     TMS Global Mercator Profile
