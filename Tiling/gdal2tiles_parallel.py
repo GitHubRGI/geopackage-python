@@ -122,12 +122,12 @@ Class is available under the open-source GDAL license (www.gdal.org).
 
 MAXZOOMLEVEL = 32
 
-class ITilingProfile(object):
+class ITileProfile(object):
     
-    def tile_bounds(self, tileX, tileY, zoom):
-        raise NotImplementedError
-        
-    def tile_lon_lat_bounds(self, tileX, tileY, zoom):
+    def __init__(self, tile_size=256):
+        self.tile_size = tile_size
+    
+    def tile_bounds(self, tile_x, tile_y, zoom):
         raise NotImplementedError
         
     def resolution(self, zoom):
@@ -136,11 +136,58 @@ class ITilingProfile(object):
     def zoom_for_pixel_size(self, pixel_size):
         raise NotImplementedError
         
-    def upper_left_tile(tx, ty, zoom):
+    @staticmethod
+    def upper_left_tile(tile_x, tile_y, zoom):
         raise NotImplementedError
         
-    def quad_tree(tx, ty, zoom):
+    @staticmethod
+    def quad_tree(tile_x, tile_y, zoom):
         raise NotImplementedError
+        
+    def pixels_to_tile(self, pixel_x, pixel_y):
+        "Returns a tile covering region in given pixel coordinates"
+        
+        tile_x = int( math.ceil( pixel_x / float(self.tile_size) ) - 1 )
+        tile_y = int( math.ceil( pixel_y / float(self.tile_size) ) - 1 )
+        return tile_x, tile_y
+        
+class ITileMath(object):
+    
+    def units_to_pixels(self, units_x, units_y, zoom):
+        raise NotImplementedError
+        
+    def units_to_tile(self, unitsX, unitsY, zoom):
+        raise NotImplementedError
+        
+    def lon_lat_to_units(self, lon, lat):
+        raise NotImplementedError
+        
+    def units_to_lon_lat(self, unitsX, unitsY):
+        raise NotImplmentedError
+        
+    def pixels_to_units(self, pixelsX, pixelsY, zoom):
+        raise NotImplementedError
+        
+    def pixels_to_raster(self, pixelsX, pixelsY, zoom):
+        raise NotImplementedError
+        
+    def lon_lat_to_pixels(self, lon, lat, zoom):
+        raise NotImplementedError
+        
+class MetersCalculations(ITileMath, ITileProfile):
+    
+    def __init__(self, tile_size=256):
+        super(ITileProfile, self).__init__(tile_size)
+        self.initial_resolution = 2 * math.pi * 6378137 / self.tileSize
+        # 156543.03392804062 for tileSize 256 pixels
+        self.origin_shift = 2 * math.pi * 6378137 / 2.0
+        # 20037508.342789244
+        
+class GeodeticCalculations(ITileMath, ITileProfile):
+    
+    def __init__(self, tile_size=256):
+        super(ITileProfile, self).__init__(tile_size)
+        self.res_fact = 360.0 / self.tileSize
 
 class GlobalMercator(object):
     """
