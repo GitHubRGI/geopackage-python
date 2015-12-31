@@ -75,8 +75,6 @@ except:
     # 'antialias' resampling is not available
     pass
 
-__version__ = "$Id: gdal2tiles.py 19288 2010-04-02 18:36:17Z rouault $"
-
 resampling_list = ('near', 'average', 'bilinear', 'cubic', 'cubicspline', \
         'lanczos', 'antialias')
 profile_list    = ('mercator', 'geodetic', 'raster') #,'zoomify')
@@ -211,8 +209,8 @@ class PixelsToMeters(IConverter):
         if kwargs is None:
             raise KeyError("This function requires more inputs.")
         try:
-            mx = value.px * kwargs["resolution"] - kwargs["origin_shift"]
-            my = value.py * kwargs["resolution"] - kwargs["origin_shift"]
+            mx = value.x * kwargs["resolution"] - kwargs["origin_shift"]
+            my = value.y * kwargs["resolution"] - kwargs["origin_shift"]
             return MetersPoint(mx, my)
         except (AttributeError, KeyError):
             raise
@@ -257,7 +255,7 @@ class PixelsToRaster(IConverter):
             raise KeyError("This function requires more inputs.")
         try:
             mapSize = kwargs["tile_size"] << kwargs["zoom"]
-            return [value.px, mapSize - value.py]
+            return [value.x, mapSize - value.y]
         except (AttributeError, KeyError):
             raise
 
@@ -273,7 +271,7 @@ class MetersToTile(IConverter):
             meters_to_pixels = MetersToPixels()
             pixels_point = meters_to_pixels.execute(value, \
                 origin_shift=kwargs["origin_shift"], \
-                resolution=kwargs["resolution"])
+               resolution=kwargs["resolution"])
             pixels_to_tile = PixelsToTile()
             return pixels_to_tile.execute(pixels_point, tile_size=kwargs["tile_size"])
         except (AttributeError, KeyError):
@@ -387,13 +385,6 @@ class GlobalMercatorProfile(ITileProfile):
         raise NotImplementedError("No converter for {}".format(type(value)))
 
 class GeodeticProfile(ITileProfile):
-
-    def __init__(self, tile_size=256):
-        super(ITileProfile, self).__init__(tile_size)
-        self.res_fact = 360.0 / self.tile_size
-
-
-class GlobalMercator(object):
     """
     TMS Global Mercator Profile
     ---------------------------
@@ -404,7 +395,7 @@ class GlobalMercator(object):
     Such tiles are compatible with Google Maps, Microsoft Virtual Earth, Yahoo Maps,
     UK Ordnance Survey OpenSpace API, ...
     and you can overlay them on top of base maps of those web mapping applications.
-    
+
     Pixel and tile coordinates are in TMS notation (origin [0,0] in bottom-left).
 
     What coordinate conversions do we need for TMS Global Mercator tiles::
@@ -450,7 +441,7 @@ class GlobalMercator(object):
       Well, the web clients like Google Maps are projecting those coordinates by
       Spherical Mercator, so in fact lat/lon coordinates on sphere are treated as if
       the were on the WGS84 ellipsoid.
-     
+
       From MSDN documentation:
       To simplify the calculations, we use the spherical form of projection, not
       the ellipsoidal form. Since the projection is used only for map display,
@@ -491,122 +482,10 @@ class GlobalMercator(object):
                  AUTHORITY["EPSG","9001"]]]
     """
 
-    def __init__(self, tileSize=256):
-        "Initialize the TMS Global Mercator pyramid"
-        self.tileSize = tileSize
-        self.initialResolution = 2 * pi * 6378137 / self.tileSize
-        # 156543.03392804062 for tileSize 256 pixels
-        self.originShift = 2 * pi * 6378137 / 2.0
-        # 20037508.342789244
+    def __init__(self, tile_size=256):
+        super(ITileProfile, self).__init__(tile_size)
+        self.res_fact = 360.0 / self.tile_size
 
-    def LatLonToMeters(self, lat, lon ):
-        "Converts given lat/lon in WGS84 Datum to XY in Spherical Mercator EPSG:900913"
-
-        mx = lon * self.originShift / 180.0
-        my = log( tan((90 + lat) * pi / 360.0 )) / (pi / 180.0)
-
-        my = my * self.originShift / 180.0
-        return mx, my
-
-    def MetersToLatLon(self, mx, my ):
-        "Converts XY point from Spherical Mercator EPSG:900913 to lat/lon in WGS84 Datum"
-
-        lon = (mx / self.originShift) * 180.0
-        lat = (my / self.originShift) * 180.0
-
-        lat = 180 / pi * (2 * atan( exp( lat * pi / 180.0)) - pi / 2.0)
-        return lat, lon
-
-    def PixelsToMeters(self, px, py, zoom):
-        "Converts pixel coordinates in given zoom level of pyramid to EPSG:900913"
-
-        res = self.Resolution( zoom )
-        mx = px * res - self.originShift
-        my = py * res - self.originShift
-        return mx, my
-        
-    def MetersToPixels(self, mx, my, zoom):
-        "Converts EPSG:900913 to pyramid pixel coordinates in given zoom level"
-                
-        res = self.Resolution( zoom )
-        px = (mx + self.originShift) / res
-        py = (my + self.originShift) / res
-        return px, py
-    
-    def PixelsToTile(self, px, py):
-        "Returns a tile covering region in given pixel coordinates"
-
-        tx = int( ceil( px / float(self.tileSize) ) - 1 )
-        ty = int( ceil( py / float(self.tileSize) ) - 1 )
-        return tx, ty
-
-    def PixelsToRaster(self, px, py, zoom):
-        "Move the origin of pixel coordinates to top-left corner"
-        
-        mapSize = self.tileSize << zoom
-        return px, mapSize - py
-        
-    def MetersToTile(self, mx, my, zoom):
-        "Returns tile for given mercator coordinates"
-        
-        px, py = self.MetersToPixels( mx, my, zoom)
-        return self.PixelsToTile( px, py)
-
-    def TileBounds(self, tx, ty, zoom):
-        "Returns bounds of the given tile in EPSG:900913 coordinates"
-        
-        minx, miny = self.PixelsToMeters( tx*self.tileSize, ty*self.tileSize, zoom )
-        maxx, maxy = self.PixelsToMeters( (tx+1)*self.tileSize, (ty+1)*self.tileSize, zoom )
-        return ( minx, miny, maxx, maxy )
-
-    def TileLatLonBounds(self, tx, ty, zoom ):
-        "Returns bounds of the given tile in latutude/longitude using WGS84 datum"
-
-        bounds = self.TileBounds( tx, ty, zoom)
-        minLat, minLon = self.MetersToLatLon(bounds[0], bounds[1])
-        maxLat, maxLon = self.MetersToLatLon(bounds[2], bounds[3])
-         
-        return ( minLat, minLon, maxLat, maxLon )
-        
-    def Resolution(self, zoom ):
-        "Resolution (meters/pixel) for given zoom level (measured at Equator)"
-        
-        # return (2 * pi * 6378137) / (self.tileSize * 2**zoom)
-        return self.initialResolution / (2**zoom)
-        
-    def ZoomForPixelSize(self, pixelSize ):
-        "Maximal scaledown zoom of the pyramid closest to the pixelSize."
-        
-        for i in range(MAXZOOMLEVEL):
-            if pixelSize > self.Resolution(i):
-                if i!=0:
-                    return i-1
-                else:
-                    return 0 # We don't want to scale up
-        
-    def GoogleTile(self, tx, ty, zoom):
-        "Converts TMS tile coordinates to Google Tile coordinates"
-        
-        # coordinate origin is moved from bottom-left to top-left corner of the extent
-        return tx, (2**zoom - 1) - ty
-
-    def QuadTree(self, tx, ty, zoom ):
-        "Converts TMS tile coordinates to Microsoft QuadTree"
-        
-        quadKey = ""
-        ty = (2**zoom - 1) - ty
-        for i in range(zoom, 0, -1):
-            digit = 0
-            mask = 1 << (i-1)
-            if (tx & mask) != 0:
-                digit += 1
-            if (ty & mask) != 0:
-                digit += 2
-            quadKey += str(digit)
-            
-        return quadKey
-
-#---------------------
 
 class GlobalGeodetic(object):
     """
@@ -2618,3 +2497,72 @@ def main(argv=None):
 if __name__=='__main__':
     main(None)
     main(None)
+    
+if __name__ == "__main__":
+    print("""
+        gdal2tiles_parallel.py  Copyright (C) 2014  Reinventing Geospatial, Inc
+        This program comes with ABSOLUTELY NO WARRANTY.
+        This is free software, and you are welcome to redistribute it
+        under certain conditions.
+    """)
+    PROFILE_LIST = ('mercator', 'geodetic', 'raster')
+    PARSER = ArgumentParser(description="Create TMS tiles")
+    #usage = "Usage: %prog [options] input_file(s) [output]"
+    #p = OptionParser(usage, version="%prog "+ __version__)
+    #p.add_option("-p", "--profile", dest='profile', type='choice', choices=profile_list,
+    #                  help="Tile cutting profile (%s) - default 'mercator' (Google Maps compatible)" % ",".join(profile_list))
+    PARSER.add_argument("-p", "--profile", dest="profile", \
+        choices=PROFILE_LIST, default="mercator", \
+        help="Tile cutting profile ({})".format(",".join(PROFILE_LIST)) +
+        " - default 'mercator' (Google Maps compatible)")
+    p.add_option("-r", "--resampling", dest="resampling", type='choice', choices=resampling_list,
+                    help="Resampling method (%s) - default 'near (fastest)'" % ",".join(resampling_list))
+    p.add_option('-s', '--s_srs', dest="s_srs", metavar="SRS",
+                      help="The spatial reference system used for the source input data")
+    p.add_option('-z', '--zoom', dest="zoom",
+                      help="Zoom levels to render (format:'2-5' or '10').")
+    p.add_option('-e', '--resume', dest="resume", action="store_true", default=True,
+                      help="Resume mode. Generate only missing files.")
+    p.add_option('-a', '--srcnodata', dest="srcnodata", metavar="NODATA",
+                      help="NODATA transparency value to assign to the input data")
+    p.add_option('--processes', dest='processes', type='int', default=cpu_count(),
+                    help='Number of concurrent processes (defaults to the number of cores in the system)')
+    p.add_option("-v", "--verbose",
+                      action="store_true", dest="verbose",
+                      help="Print status messages to stdout")
+
+    # KML options 
+    g = OptionGroup(p, "KML (Google Earth) options", "Options for generated Google Earth SuperOverlay metadata")
+    g.add_option("-k", "--force-kml", dest='kml', action="store_true",
+                      help="Generate KML for Google Earth - default for 'geodetic' profile and 'raster' in EPSG:4326. For a dataset with different projection use with caution!")
+    g.add_option("-n", "--no-kml", dest='kml', action="store_false",
+                      help="Avoid automatic generation of KML files for EPSG:4326")
+    g.add_option("-u", "--url", dest='url',
+                      help="URL address where the generated tiles are going to be published")
+    p.add_option_group(g)
+
+    # HTML options
+    g = OptionGroup(p, "Web viewer options", "Options for generated HTML viewers a la Google Maps")
+    g.add_option("-w", "--webviewer", dest='webviewer', type='choice', choices=webviewer_list,
+                      help="Web viewer to generate (%s) - default 'all'" % ",".join(webviewer_list))
+    g.add_option("-t", "--title", dest='title',
+                      help="Title of the map")
+    g.add_option("-c", "--copyright", dest='copyright',
+                      help="Copyright for the map")
+    g.add_option("-g", "--googlekey", dest='googlekey',
+                      help="Google Maps API key from http://code.google.com/apis/maps/signup.html")
+    g.add_option("-y", "--yahookey", dest='yahookey',
+                      help="Yahoo Application ID from http://developer.yahoo.com/wsregapp/")
+    p.add_option_group(g)
+    
+    # TODO: MapFile + TileIndexes per zoom level for efficient MapServer WMS
+    #g = OptionGroup(p, "WMS MapServer metadata", "Options for generated mapfile and tileindexes for MapServer")
+    #g.add_option("-i", "--tileindex", dest='wms', action="store_true"
+    #                 help="Generate tileindex and mapfile for MapServer (WMS)")
+    # p.add_option_group(g)
+
+    p.set_defaults(verbose=False, profile="mercator", kml=False, url='',
+    webviewer='all', copyright='', resampling='average', resume=False,
+    googlekey='INSERT_YOUR_KEY_HERE', yahookey='INSERT_YOUR_YAHOO_APP_ID_HERE')
+
+    self.parser = p
