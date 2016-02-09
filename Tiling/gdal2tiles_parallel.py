@@ -52,21 +52,20 @@
 #  or write to the Free Software Foundation, Inc., 59 Temple Place -
 #  Suite 330, Boston, MA 02111-1307, USA.
 
-import sys
+from tempfile import mktemp
+from collections import namedtuple
+from sys import exit, stdout, argv as sys_argv
+from os import path, unlink, makedirs
+from math import pi, tan, log, exp, atan, ceil, log10
+from multiprocessing import cpu_count, Pool, Process, Queue
+from optparse import OptionParser, OptionGroup
 
 try:
-    from osgeo import gdal
-    from osgeo import osr
+    from osgeo import gdal, osr
 except:
     import gdal
     print('You are using "old gen" bindings. gdal2tiles needs "new gen" bindings.')
-    sys.exit(1)
-
-import os
-import math
-from sys import version_info
-if version_info[0] == 3:
-    xrange = range
+    exit(1)
 
 try:
     from PIL import Image
@@ -76,17 +75,13 @@ except:
     # 'antialias' resampling is not available
     pass
 
-import multiprocessing
-import tempfile
-from collections import namedtuple
-from optparse import OptionParser, OptionGroup
-
 __version__ = "$Id: gdal2tiles.py 19288 2010-04-02 18:36:17Z rouault $"
 
-resampling_list = ('near','average','bilinear','cubic','cubicspline','lanczos','antialias')
-profile_list = ('mercator','geodetic','raster') #,'zoomify')
-webviewer_list = ('all','google','openlayers','none')
-queue = multiprocessing.Queue()
+resampling_list = ('near', 'average', 'bilinear', 'cubic', 'cubicspline', \
+        'lanczos', 'antialias')
+profile_list    = ('mercator', 'geodetic', 'raster') #,'zoomify')
+webviewer_list  = ('all', 'google', 'openlayers', 'none')
+queue           = Queue()
 
 # =============================================================================
 # =============================================================================
@@ -126,176 +121,271 @@ Class is available under the open-source GDAL license (www.gdal.org).
 
 MAXZOOMLEVEL = 32
 
-Tile = namedtuple('Tile', ['tx', 'ty'])
-LonLatPoint = namedtuple('LonLatPoint', ['lon', 'lat'])
-MetersPoint = namedtuple('MetersPoint', ['mx', 'my'])
-PixelsPoint = namedtuple('PixelsPoint', ['x', 'y'])
+Tile = namedtuple("Tile", ["tx", "ty"])
+LonLatPoint = namedtuple("LonLatPoint", ["lon", "lat"])
+MetersPoint = namedtuple("MetersPoint", ["mx", "my"])
+PixelsPoint = namedtuple("PixelsPoint", ["x", "y"])
 
 
 class ITileProfile(object):
 
-    def __init__(self, tile_size=256):
-        self.tile_size = tile_size
-
     @staticmethod
     def lower_left_tile(tile, zoom):
         # TMS origin
-        return tile, zoom
+        return tile
 
     @staticmethod
     def upper_left_tile(tile, zoom):
-        # WMTS origin
+        # WMTS origin / GoogleTile
         try:
             ty = (1 << zoom) - tile.ty - 1
-            return Tile(tile.tx, ty), zoom
+            return Tile(tile.tx, ty)
         except AttributeError:
             raise
 
-    def tile_from_pixels(self, point):
-        "Returns a tile covering region in given pixel coordinates"
+    @staticmethod
+    def quad_tree(tile, zoom):
+        "Converts TMS tile coordinates to Microsoft QuadTree"
+        quadKey = ""
+        ty = (1 << zoom) - tile.ty - 1
+        for i in range(zoom, 0, -1):
+            digit = 0
+            mask = 1 << (i-1)
+            if (tile.tx & mask) != 0:
+                digit += 1
+            if (ty & mask) != 0:
+                digit += 2
+            quadKey += str(digit)
+        return quadKey
+
+    def zoom_for_pixel_size(self, pixel_size):
+        raise NotImplementedError("Base interface method not implemented.")
+
+    def resolution(self, zoom):
+        raise NotImplementedError("Base interface method not implemented.")
+
+class IConverter(object):
+
+    @staticmethod
+    def execute(value, **kwargs):
+        raise NotImplementedError("Base interface method not implemented.")
+
+
+class LonLatToMeters(IConverter):
+
+    @staticmethod
+    def execute(value, **kwargs):
+        "Converts given lat/lon in WGS84 Datum to XY in Spherical Mercator EPSG:900913"
+        if kwargs is None:
+            raise KeyError("This function requires more inputs.")
         try:
-            tx = int(math.ceil(point.x / float(self.tile_size)) - 1)
-            ty = int(math.ceil(point.y / float(self.tile_size)) - 1)
+            mx = value.lon * kwargs["origin_shift"] / 180.0
+            my = log(tan((90.0 + value.lat) * pi / 360.0 )) / (pi / 180.0)
+            my = my * kwargs["origin_shift"] / 180.0
+            return MetersPoint(mx, my)
+        except (AttributeError, KeyError):
+            raise
+
+
+class MetersToLonLat(IConverter):
+
+    @staticmethod
+    def execute(value, **kwargs):
+        "Converts XY point from Spherical Mercator EPSG:900913 to lat/lon in WGS84 Datum"
+        if kwargs is None:
+            raise KeyError("This function requires more inputs.")
+        try:
+            lon = (value.mx / kwargs["origin_shift"]) * 180.0
+            lat = (value.my / kwargs["origin_shift"]) * 180.0
+            lat = 180.0 / pi * (2.0 * atan(exp(lat * pi / 180.0)) - pi / 2.0)
+            return LonLatPoint(lon, lat)
+        except (AttributeError, KeyError):
+            raise
+
+
+class PixelsToMeters(IConverter):
+
+    @staticmethod
+    def execute(value, **kwargs):
+        "Converts pixel coordinates in given zoom level of pyramid to EPSG:900913"
+        if kwargs is None:
+            raise KeyError("This function requires more inputs.")
+        try:
+            mx = value.px * kwargs["resolution"] - kwargs["origin_shift"]
+            my = value.py * kwargs["resolution"] - kwargs["origin_shift"]
+            return MetersPoint(mx, my)
+        except (AttributeError, KeyError):
+            raise
+
+
+class MetersToPixels(IConverter):
+
+    @staticmethod
+    def execute(value, **kwargs):
+        "Converts EPSG:900913 to pyramid pixel coordinates in given zoom level"
+        if kwargs is None:
+            raise KeyError("This function requires more inputs.")
+        try:
+            px = (value.mx + kwargs["origin_shift"]) / kwargs["resolution"]
+            py = (value.my + kwargs["origin_shift"]) / kwargs["resolution"]
+            return PixelsPoint(px, py)
+        except (AttributeError, KeyError):
+            raise
+
+
+class PixelsToTile(IConverter):
+
+    @staticmethod 
+    def execute(value, **kwargs):
+        "Returns a tile covering region in given pixel coordinates"
+        if kwargs is None:
+            raise KeyError("This function requires more inputs.")
+        try:
+            tx = int(ceil(value.x / float(kwargs["tile_size"]) ) - 1 )
+            ty = int(ceil(value.y / float(kwargs["tile_size"]) ) - 1 )
             return Tile(tx, ty)
-        except AttributeError:
+        except (AttributeError, KeyError):
+            raise
+
+
+class PixelsToRaster(IConverter):
+
+    @staticmethod
+    def execute(value, **kwargs):
+        "Move the origin of pixel coordinates to top-left corner"
+        if kwargs is None:
+            raise KeyError("This function requires more inputs.")
+        try:
+            mapSize = kwargs["tile_size"] << kwargs["zoom"]
+            return [value.px, mapSize - value.py]
+        except (AttributeError, KeyError):
+            raise
+
+
+class MetersToTile(IConverter):
+
+    @staticmethod
+    def execute(value, **kwargs):
+        "Returns tile for given mercator coordinates"
+        if kwargs is None:
+            raise KeyError("This function requires more inputs.")
+        try:
+            meters_to_pixels = MetersToPixels()
+            pixels_point = meters_to_pixels.execute(value, \
+                origin_shift=kwargs["origin_shift"], \
+                resolution=kwargs["resolution"])
+            pixels_to_tile = PixelsToTile()
+            return pixels_to_tile.execute(pixels_point, tile_size=kwargs["tile_size"])
+        except (AttributeError, KeyError):
             raise
 
 
 class GlobalMercatorProfile(ITileProfile):
 
     def __init__(self, tile_size=256):
-        super(GlobalMercatorProfile, self).__init__(tile_size)
-        self.initial_resolution = 2 * math.pi * 6378137 / self.tile_size
+        self.tile_size = tile_size
+        self.initial_resolution = 2 * pi * 6378137 / self.tile_size
         # 156543.03392804062 for tile_size 256 pixels
-        self.origin_shift = 2 * math.pi * 6378137 / 2.0
+        self.origin_shift = 2 * pi * 6378137 / 2.0
         # 20037508.342789244
 
-    def units_from_lon_lat(self, point):
-        """Converts given lon/lat in WGS84 Datum to XY in Spherical Mercator
-        EPSG:900913"""
-        try:
-            mx = point.lon * self.origin_shift / 180.0
-            my = math.log(
-                math.tan(
-                    (90 + point.lat) * math.pi / 360.0)
-                ) / (math.pi / 180.0)
-
-            my = my * self.origin_shift / 180.0
-            return MetersPoint(mx, my)
-        except AttributeError:
-            raise
-
-    def lon_lat_from_units(self, point):
-        """Converts XY point from Spherical Mercator EPSG:900913 to lat/lon in
-        WGS84 Datum"""
-        try:
-            lon = (point.mx / self.origin_shift) * 180.0
-            lat = (point.my / self.origin_shift) * 180.0
-
-            lat = 180 / math.pi * (2 * math.atan(math.exp(
-                lat * math.pi / 180.0)) - math.pi / 2.0)
-            return LonLatPoint(lon, lat)
-        except AttributeError:
-            raise
-
-    def units_from_pixels(self, point, zoom):
-        """Converts pixel coordinates in given zoom level of pyramid to
-        EPSG:900913"""
-        try:
-            resolution = self.resolution(zoom)
-            mx = point.x * resolution - self.origin_shift
-            my = point.y * resolution - self.origin_shift
-            return MetersPoint(mx, my)
-        except AttributeError:
-            raise
-
-    def pixels_from_units(self, point, zoom):
-        """Converts EPSG:900913 to pyramid pixel coordinates in given zoom
-        level"""
-        try:
-            resolution = self.resolution(zoom)
-            x = (point.mx + self.origin_shift) / resolution
-            y = (point.my + self.origin_shift) / resolution
-            return PixelsPoint(x, y)
-        except AttributeError:
-            raise
-
-    def raster_from_pixels(self, point, zoom):
-        "Move the origin of pixel coordinates to top-left corner"
-        try:
-            map_size = self.tile_size << zoom
-            return point.x, map_size - point.y
-        except AttributeError:
-            raise
-
-    def tile_from_units(self, point, zoom):
-        "Returns tile for given mercator coordinates"
-        try:
-            x, y = self.pixels_from_units(point, zoom)
-            return self.tile_from_pixels(PixelsPoint(x, y))
-        except AttributeError:
-            raise
-
-    def tile_bounds(self, tile, zoom):
-        "Returns bounds of the given tile in EPSG:900913 coordinates"
-        try:
-            min_x, min_y = self.units_from_pixels(tile.x * self.tile_size,
-                                                  tile.y * self.tile_size,
-                                                  zoom)
-            max_x, max_y = self.PixelsToMeters((tile.x + 1) * self.tile_size,
-                                               (tile.y + 1) * self.tile_size,
-                                               zoom)
-            return (min_x, min_y, max_x, max_y)
-        except AttributeError:
-            raise
-
-    def tile_lon_lat_bounds(self, tile, zoom):
-        """Returns bounds of the given tile in latutude/longitude using WGS84
-        datum"""
-
-        bounds = self.tile_bounds(tile, zoom)
-        min_lon, min_lat = self.lon_lat_from_units(bounds[1], bounds[0])
-        max_lon, max_lat = self.lon_lat_from_units(bounds[3], bounds[2])
-
-        return (min_lon, min_lat, max_lon, max_lat)
-
     def resolution(self, zoom):
-        "Resolution (meters/pixel) for given zoom level (measured at Equator)"
-
-        # return (2 * math.pi * 6378137) / (self.tile_size * 2**zoom)
         return self.initial_resolution / (2 ** zoom)
 
     def zoom_for_pixel_size(self, pixel_size):
         "Maximal scaledown zoom of the pyramid closest to the pixelSize."
-
-        for zoom_level in range(MAXZOOMLEVEL):
-            if pixel_size > self.resolution(zoom_level):
-                if zoom_level != 0:
-                    return zoom_level - 1
+        for i in range(MAXZOOMLEVEL):
+            if pixel_size > self.resolution(i):
+                if i != 0:
+                    return i - 1
                 else:
-                    # We don't want to scale up
-                    return 0
+                    return 0 # We don't want to scale up
 
-    def google_tile(self, tile, zoom):
-        "Converts TMS tile coordinates to Google Tile coordinates"
-        return self.upper_left_tile(tile, zoom)
+    def to_tile(self, value, **kwargs):
+        # pixels
+        if type(value) == PixelsPoint:
+            converter = PixelsToTile()
+            return converter.execute(value, tile_size=self.tile_size)
+        # meters
+        if type(value) == MetersPoint:
+            if kwargs is None:
+                raise KeyError("This function requires more inputs.")
+            try:
+                converter = MetersToTile()
+                return converter.execute(value, tile_size=self.tile_size, \
+                    resolution=self.resolution(kwargs["zoom"]), \
+                    origin_shift=self.origin_shift)
+            except KeyError:
+                raise
+        # return the same value if it already is a tile
+        if type(value) == Tile:
+            return value
+        raise NotImplementedError("No converter for {}".format(type(value)))
 
-    def quad_tree(self, tile, zoom):
-        "Converts TMS tile coordinates to Microsoft QuadTree"
-        try:
-            quadKey = ""
-            ty = ((2 ** zoom) - 1) - tile.y
-            for zoom_level in xrange(zoom, 0, -1):
-                digit = 0
-                mask = 1 << (zoom_level - 1)
-                if (tile.x & mask) != 0:
-                    digit += 1
-                if (ty & mask) != 0:
-                    digit += 2
-                quadKey += str(digit)
-            return quadKey
-        except AttributeError:
-            raise
+    def to_map_coordinates(self, value, **kwargs):
+        # lat lon
+        if type(value) == LonLatPoint:
+            converter = LonLatToMeters()
+            return converter.execute(value, origin_shift=self.origin_shift)
+        # pixels
+        if type(value) == PixelsPoint:
+            try:
+                if kwargs is None:
+                    raise KeyError("This function requires more inputs.")
+                converter = PixelsToMeters()
+                zoom = kwargs["zoom"]
+                return converter.execute(value, \
+                    resolution=self.resolution(zoom), \
+                    origin_shift=self.origin_shift)
+            except KeyError:
+                raise
+        # return the same point if it already is a tile
+        if type(value) == MetersPoint:
+            return value
+        raise NotImplementedError("No converter for {}".format(type(value)))
+
+    def to_lon_lat(self, value):
+        # meters
+        if type(value) == MetersPoint:
+            converter = MetersToLonLat()
+            return converter.execute(value, origin_shift=self.origin_shift)
+        # already a lon lat point
+        if type(value) == LonLatPoint:
+            return value
+        raise NotImplementedError("No converter for {}".format(type(value)))
+
+    def to_pixels(self, value, **kwargs):
+        # meters
+        if type(value) == MetersPoint:
+            if kwargs is None:
+                raise KeyError("This function requires more inputs.")
+            try:
+                converter = MetersToPixels()
+                zoom = kwargs["zoom"]
+                return converter.execute(value, \
+                    resolution=self.resolution(zoom), \
+                    origin_shift=self.origin_shift)
+            except KeyError:
+                raise
+        if type(value) == PixelsPoint:
+            return value
+        raise NotImplementedError("No converter for {}".format(type(value)))
+
+    def to_raster(self, value, **kwargs):
+        # pixels
+        if type(value) == PixelsPoint:
+            if kwargs is None:
+                raise KeyError("This function requires more inputs.")
+            try:
+                converter = PixelsToRaster()
+                zoom = kwargs["zoom"]
+                return converter.execute(value, \
+                    tile_size=self.tile_size, \
+                    zoom=zoom)
+            except KeyError:
+                raise
+        raise NotImplementedError("No converter for {}".format(type(value)))
+>>>>>>> master
 
 class GeodeticProfile(ITileProfile):
 
@@ -336,7 +426,7 @@ class GlobalMercator(object):
       [-20037508.342789244, -20037508.342789244, 20037508.342789244, 20037508.342789244]
       Constant 20037508.342789244 comes from the circumference of the Earth in meters,
       which is 40 thousand kilometers, the coordinate origin is in the middle of extent.
-      In fact you can calculate the constant as: 2 * math.pi * 6378137 / 2.0
+      In fact you can calculate the constant as: 2 * pi * 6378137 / 2.0
       $ echo 180 85 | gdaltransform -s_srs EPSG:4326 -t_srs EPSG:900913
       Polar areas with abs(latitude) bigger then 85.05112878 are clipped off.
 
@@ -405,16 +495,16 @@ class GlobalMercator(object):
     def __init__(self, tileSize=256):
         "Initialize the TMS Global Mercator pyramid"
         self.tileSize = tileSize
-        self.initialResolution = 2 * math.pi * 6378137 / self.tileSize
+        self.initialResolution = 2 * pi * 6378137 / self.tileSize
         # 156543.03392804062 for tileSize 256 pixels
-        self.originShift = 2 * math.pi * 6378137 / 2.0
+        self.originShift = 2 * pi * 6378137 / 2.0
         # 20037508.342789244
 
     def LatLonToMeters(self, lat, lon ):
         "Converts given lat/lon in WGS84 Datum to XY in Spherical Mercator EPSG:900913"
 
         mx = lon * self.originShift / 180.0
-        my = math.log( math.tan((90 + lat) * math.pi / 360.0 )) / (math.pi / 180.0)
+        my = log( tan((90 + lat) * pi / 360.0 )) / (pi / 180.0)
 
         my = my * self.originShift / 180.0
         return mx, my
@@ -425,7 +515,7 @@ class GlobalMercator(object):
         lon = (mx / self.originShift) * 180.0
         lat = (my / self.originShift) * 180.0
 
-        lat = 180 / math.pi * (2 * math.atan( math.exp( lat * math.pi / 180.0)) - math.pi / 2.0)
+        lat = 180 / pi * (2 * atan( exp( lat * pi / 180.0)) - pi / 2.0)
         return lat, lon
 
     def PixelsToMeters(self, px, py, zoom):
@@ -447,8 +537,8 @@ class GlobalMercator(object):
     def PixelsToTile(self, px, py):
         "Returns a tile covering region in given pixel coordinates"
 
-        tx = int( math.ceil( px / float(self.tileSize) ) - 1 )
-        ty = int( math.ceil( py / float(self.tileSize) ) - 1 )
+        tx = int( ceil( px / float(self.tileSize) ) - 1 )
+        ty = int( ceil( py / float(self.tileSize) ) - 1 )
         return tx, ty
 
     def PixelsToRaster(self, px, py, zoom):
@@ -482,7 +572,7 @@ class GlobalMercator(object):
     def Resolution(self, zoom ):
         "Resolution (meters/pixel) for given zoom level (measured at Equator)"
         
-        # return (2 * math.pi * 6378137) / (self.tileSize * 2**zoom)
+        # return (2 * pi * 6378137) / (self.tileSize * 2**zoom)
         return self.initialResolution / (2**zoom)
         
     def ZoomForPixelSize(self, pixelSize ):
@@ -569,8 +659,8 @@ class GlobalGeodetic(object):
     def PixelsToTile(self, px, py):
         "Returns coordinates of the tile covering region in pixel coordinates"
 
-        tx = int( math.ceil( px / float(self.tileSize) ) - 1 )
-        ty = int( math.ceil( py / float(self.tileSize) ) - 1 )
+        tx = int( ceil( px / float(self.tileSize) ) - 1 )
+        ty = int( ceil( py / float(self.tileSize) ) - 1 )
         return tx, ty
     
     def LatLonToTile(self, lat, lon, zoom):
@@ -624,7 +714,7 @@ class Zoomify(object):
         self.tilesize = tilesize
         self.tileformat = tileformat
         imagesize = (width, height)
-        tiles = ( math.ceil( width / tilesize ), math.ceil( height / tilesize ) )
+        tiles = ( ceil( width / tilesize ), ceil( height / tilesize ) )
 
         # Size (in tiles) for each tier of pyramid.
         self.tierSizeInTiles = []
@@ -634,9 +724,9 @@ class Zoomify(object):
         self.tierImageSize = []
         self.tierImageSize.append( imagesize );
 
-        while (imagesize[0] > tilesize or imageSize[1] > tilesize ):
-            imagesize = (math.floor( imagesize[0] / 2 ), math.floor( imagesize[1] / 2) )
-            tiles = ( math.ceil( imagesize[0] / tilesize ), math.ceil( imagesize[1] / tilesize ) )
+        while (imagesize[0] > tilesize or imagesize[1] > tilesize ):
+            imagesize = (floor( imagesize[0] / 2 ), floor( imagesize[1] / 2) )
+            tiles = ( ceil( imagesize[0] / tilesize ), ceil( imagesize[1] / tilesize ) )
             self.tierSizeInTiles.append( tiles )
             self.tierImageSize.append( imagesize )
 
@@ -658,7 +748,7 @@ class Zoomify(object):
         """Returns filename for tile with given coordinates"""
         
         tileIndex = x + y * self.tierSizeInTiles[z][0] + self.tileCountUpToTier[z]
-        return os.path.join("TileGroup%.0f" % math.floor( tileIndex / 256 ),
+        return path.join("TileGroup%.0f" % floor( tileIndex / 256 ),
             "%s-%s-%s.%s" % ( z, x, y, self.tileformat))
 
 # =============================================================================
@@ -751,7 +841,7 @@ class GDAL2Tiles(object):
         # Is output directory the last argument?
 
         # Test output directory, if it doesn't exist
-        if os.path.isdir(self.args[-1]) or ( len(self.args) > 1 and not os.path.exists(self.args[-1])):
+        if path.isdir(self.args[-1]) or ( len(self.args) > 1 and not path.exists(self.args[-1])):
             self.output = self.args[-1]
             self.args = self.args[:-1]
 
@@ -769,15 +859,15 @@ class GDAL2Tiles(object):
         
         if not self.output:
             # Directory with input filename without extension in actual directory
-            self.output = os.path.splitext(os.path.basename( self.input ))[0]
+            self.output = path.splitext(path.basename( self.input ))[0]
                 
         if not self.options.title:
-            self.options.title = os.path.basename( self.input )
+            self.options.title = path.basename( self.input )
 
         if self.options.url and not self.options.url.endswith('/'):
             self.options.url += '/'
         if self.options.url:
-            self.options.url += os.path.basename( self.output ) + '/'
+            self.options.url += path.basename( self.output ) + '/'
 
         # Supported options
 
@@ -857,7 +947,7 @@ class GDAL2Tiles(object):
                           help="Resume mode. Generate only missing files.")
         p.add_option('-a', '--srcnodata', dest="srcnodata", metavar="NODATA",
                           help="NODATA transparency value to assign to the input data")
-        p.add_option('--processes', dest='processes', type='int', default=multiprocessing.cpu_count(),
+        p.add_option('--processes', dest='processes', type='int', default=cpu_count(),
                         help='Number of concurrent processes (defaults to the number of cores in the system)')
         p.add_option("-v", "--verbose",
                           action="store_true", dest="verbose",
@@ -1023,7 +1113,7 @@ class GDAL2Tiles(object):
 
                     # Correction of AutoCreateWarpedVRT for NODATA values
                     if self.in_nodata != []:
-                        tempfilename = tempfile.mktemp('-gdal2tiles.vrt')
+                        tempfilename = mktemp('-gdal2tiles.vrt')
                         self.out_ds.GetDriver().CreateCopy(tempfilename, self.out_ds)
                         # open as a text file
                         s = open(tempfilename).read()
@@ -1044,7 +1134,7 @@ class GDAL2Tiles(object):
                         # open by GDAL as self.out_ds
                         self.out_ds = gdal.Open(tempfilename) #, gdal.GA_ReadOnly)
                         # delete the temporary file
-                        os.unlink(tempfilename)
+                        unlink(tempfilename)
 
                         # set NODATA_VALUE metadata
                         self.out_ds.SetMetadataItem('NODATA_VALUES','%i %i %i' % (self.in_nodata[0],self.in_nodata[1],self.in_nodata[2]))
@@ -1057,7 +1147,7 @@ class GDAL2Tiles(object):
                     # Correction of AutoCreateWarpedVRT for Mono (1 band) and RGB (3 bands) files without NODATA:
                     # equivalent of gdalwarp -dstalpha
                     if self.in_nodata == [] and self.out_ds.RasterCount in [1,3]:
-                        tempfilename = tempfile.mktemp('-gdal2tiles.vrt')
+                        tempfilename = mktemp('-gdal2tiles.vrt')
                         self.out_ds.GetDriver().CreateCopy(tempfilename, self.out_ds)
                         # open as a text file
                         s = open(tempfilename).read()
@@ -1075,7 +1165,7 @@ class GDAL2Tiles(object):
                         # open by GDAL as self.out_ds
                         self.out_ds = gdal.Open(tempfilename) #, gdal.GA_ReadOnly)
                         # delete the temporary file
-                        os.unlink(tempfilename)
+                        unlink(tempfilename)
 
                         if self.options.verbose:
                             print("Modified -dstalpha warping result saved into 'tiles1.vrt'")
@@ -1216,10 +1306,10 @@ class GDAL2Tiles(object):
                     
         if self.options.profile == 'raster':
             
-            log2 = lambda x: math.log10(x) / math.log10(2) # log2 (base 2 logarithm)
+            log2 = lambda x: log10(x) / log10(2) # log2 (base 2 logarithm)
             
-            self.nativezoom = int(max( math.ceil(log2(self.out_ds.RasterXSize/float(self.tilesize))),
-                                       math.ceil(log2(self.out_ds.RasterYSize/float(self.tilesize)))))
+            self.nativezoom = int(max( ceil(log2(self.out_ds.RasterXSize/float(self.tilesize))),
+                                       ceil(log2(self.out_ds.RasterYSize/float(self.tilesize)))))
             
             if self.options.verbose:
                 print("Native zoom of the raster:", self.nativezoom)
@@ -1238,9 +1328,9 @@ class GDAL2Tiles(object):
             for tz in range(0, self.tmaxz+1):
                 tsize = 2.0**(self.nativezoom-tz)*self.tilesize
                 tminx, tminy = 0, 0
-                tmaxx = int(math.ceil( self.out_ds.RasterXSize / tsize )) - 1
-                tmaxy = int(math.ceil( self.out_ds.RasterYSize / tsize )) - 1
-                self.tsize[tz] = math.ceil(tsize)
+                tmaxx = int(ceil( self.out_ds.RasterXSize / tsize )) - 1
+                tmaxy = int(ceil( self.out_ds.RasterYSize / tsize )) - 1
+                self.tsize[tz] = ceil(tsize)
                 self.tminmax[tz] = (tminx, tminy, tmaxx, tmaxy)
 
             # Function which generates SWNE in LatLong for given tile
@@ -1269,8 +1359,8 @@ class GDAL2Tiles(object):
         """Generation of main metadata files and HTML viewers (metadata related to particular tiles are generated during the tile processing)."""
         # Do not generate any metadata outside of tile map resource
         
-        if not os.path.exists(self.output):
-            os.makedirs(self.output)
+        if not path.exists(self.output):
+            makedirs(self.output)
 
         if self.options.profile == 'mercator':
             
@@ -1282,15 +1372,15 @@ class GDAL2Tiles(object):
 
             # # Generate googlemaps.html
             # if self.options.webviewer in ('all','google') and self.options.profile == 'mercator':
-            #   if not self.options.resume or not os.path.exists(os.path.join(self.output, 'googlemaps.html')):
-            #       f = open(os.path.join(self.output, 'googlemaps.html'), 'w')
+            #   if not self.options.resume or not path.exists(path.join(self.output, 'googlemaps.html')):
+            #       f = open(path.join(self.output, 'googlemaps.html'), 'w')
             #       f.write( self.generate_googlemaps() )
             #       f.close()
 
             # # Generate openlayers.html
             # if self.options.webviewer in ('all','openlayers'):
-            #   if not self.options.resume or not os.path.exists(os.path.join(self.output, 'openlayers.html')):
-            #       f = open(os.path.join(self.output, 'openlayers.html'), 'w')
+            #   if not self.options.resume or not path.exists(path.join(self.output, 'openlayers.html')):
+            #       f = open(path.join(self.output, 'openlayers.html'), 'w')
             #       f.write( self.generate_openlayers() )
             #       f.close()
 
@@ -1304,8 +1394,8 @@ class GDAL2Tiles(object):
             
             # # Generate openlayers.html
             # if self.options.webviewer in ('all','openlayers'):
-            #   if not self.options.resume or not os.path.exists(os.path.join(self.output, 'openlayers.html')):
-            #       f = open(os.path.join(self.output, 'openlayers.html'), 'w')
+            #   if not self.options.resume or not path.exists(path.join(self.output, 'openlayers.html')):
+            #       f = open(path.join(self.output, 'openlayers.html'), 'w')
             #       f.write( self.generate_openlayers() )
             #       f.close()           
 
@@ -1318,14 +1408,14 @@ class GDAL2Tiles(object):
             
             # # Generate openlayers.html
             # if self.options.webviewer in ('all','openlayers'):
-            #   if not self.options.resume or not os.path.exists(os.path.join(self.output, 'openlayers.html')):
-            #       f = open(os.path.join(self.output, 'openlayers.html'), 'w')
+            #   if not self.options.resume or not path.exists(path.join(self.output, 'openlayers.html')):
+            #       f = open(path.join(self.output, 'openlayers.html'), 'w')
             #       f.write( self.generate_openlayers() )
             #       f.close()           
 
         # Generate tilemapresource.xml.
-        if not self.options.resume or not os.path.exists(os.path.join(self.output, 'tilemapresource.xml')):
-            f = open(os.path.join(self.output, 'tilemapresource.xml'), 'w')
+        if not self.options.resume or not path.exists(path.join(self.output, 'tilemapresource.xml')):
+            f = open(path.join(self.output, 'tilemapresource.xml'), 'w')
             f.write( self.generate_tilemapresource())
             f.close()
 
@@ -1339,8 +1429,8 @@ class GDAL2Tiles(object):
         #           children.append( [ x, y, self.tminz ] ) 
         #   # Generate Root KML
         #   if self.kml:
-        #       if not self.options.resume or not os.path.exists(os.path.join(self.output, 'doc.kml')):
-        #           f = open(os.path.join(self.output, 'doc.kml'), 'w')
+        #       if not self.options.resume or not path.exists(path.join(self.output, 'doc.kml')):
+        #           f = open(path.join(self.output, 'doc.kml'), 'w')
         #           f.write( self.generate_kml( None, None, None, children) )
         #           f.close()
         
@@ -1389,11 +1479,11 @@ class GDAL2Tiles(object):
                 ti += 1
                 if (ti - 1) % self.options.processes != cpu:
                     continue
-                tilefilename = os.path.join(self.output, str(tz), str(tx), "%s.%s" % (ty, self.tileext))
+                tilefilename = path.join(self.output, str(tz), str(tx), "%s.%s" % (ty, self.tileext))
                 if self.options.verbose:
                     print(ti,'/',tcount, tilefilename) #, "( TileMapService: z / x / y )"
 
-                if self.options.resume and os.path.exists(tilefilename):
+                if self.options.resume and path.exists(tilefilename):
                     if self.options.verbose:
                         print("Tile generation skiped because of --resume")
                     else:
@@ -1402,8 +1492,8 @@ class GDAL2Tiles(object):
                     continue
 
                 # Create directories for the tile
-                if not os.path.exists(os.path.dirname(tilefilename)):
-                    os.makedirs(os.path.dirname(tilefilename))
+                if not path.exists(path.dirname(tilefilename)):
+                    makedirs(path.dirname(tilefilename))
 
                 if self.options.profile == 'mercator':
                     # Tile bounds in EPSG:900913
@@ -1497,8 +1587,8 @@ class GDAL2Tiles(object):
                 # Do not create KML, we dont use it and it takes up valuable processing time
                 # Create a KML file for this tile.
                 #if self.kml:
-                #   kmlfilename = os.path.join(self.output, str(tz), str(tx), '%d.kml' % ty)
-                #   if not self.options.resume or not os.path.exists(kmlfilename):
+                #   kmlfilename = path.join(self.output, str(tz), str(tx), '%d.kml' % ty)
+                #   if not self.options.resume or not path.exists(kmlfilename):
                 #       f = open( kmlfilename, 'w')
                 #       f.write( self.generate_kml( tx, ty, tz ))
                 #       f.close()
@@ -1534,12 +1624,12 @@ class GDAL2Tiles(object):
                 ti += 1
                 if (ti - 1) % self.options.processes != cpu:
                     continue
-                tilefilename = os.path.join( self.output, str(tz), str(tx), "%s.%s" % (ty, self.tileext) )
+                tilefilename = path.join( self.output, str(tz), str(tx), "%s.%s" % (ty, self.tileext) )
 
                 if self.options.verbose:
                     print(ti,'/',tcount, tilefilename) #, "( TileMapService: z / x / y )"
                 
-                if self.options.resume and os.path.exists(tilefilename):
+                if self.options.resume and path.exists(tilefilename):
                     if self.options.verbose:
                         print("Tile generation skiped because of --resume")
                     else:
@@ -1548,8 +1638,8 @@ class GDAL2Tiles(object):
                     continue
 
                 # Create directories for the tile
-                if not os.path.exists(os.path.dirname(tilefilename)):
-                    os.makedirs(os.path.dirname(tilefilename))
+                if not path.exists(path.dirname(tilefilename)):
+                    makedirs(path.dirname(tilefilename))
 
                 dsquery = self.mem_drv.Create('', 2*self.tilesize, 2*self.tilesize, tilebands)
                 # TODO: fill the null value
@@ -1567,7 +1657,7 @@ class GDAL2Tiles(object):
                     for x in range(2*tx,2*tx+2):
                         minx, miny, maxx, maxy = self.tminmax[tz+1]
                         if x >= minx and x <= maxx and y >= miny and y <= maxy:
-                            dsquerytile = gdal.Open( os.path.join( self.output, str(tz+1), str(x), "%s.%s" % (y, self.tileext)), gdal.GA_ReadOnly)
+                            dsquerytile = gdal.Open( path.join( self.output, str(tz+1), str(x), "%s.%s" % (y, self.tileext)), gdal.GA_ReadOnly)
                             if (ty==0 and y==1) or (ty!=0 and (y % (2*ty)) != 0):
                                 tileposy = 0
                             else:
@@ -1595,7 +1685,7 @@ class GDAL2Tiles(object):
                 # Do not create KML
                 # Create a KML file for this tile.
                 #if self.kml:
-                #   f = open( os.path.join(self.output, '%d/%d/%d.kml' % (tz, tx, ty)), 'w')
+                #   f = open( path.join(self.output, '%d/%d/%d.kml' % (tz, tx, ty)), 'w')
                 #   f.write( self.generate_kml( tx, ty, tz, children ) )
                 #   f.close()
 
@@ -1675,7 +1765,7 @@ class GDAL2Tiles(object):
                 array[:,:,i] = gdalarray.BandReadAsArray(dsquery.GetRasterBand(i+1), 0, 0, querysize, querysize)
             im = Image.fromarray(array, 'RGBA') # Always four bands
             im1 = im.resize((tilesize,tilesize), Image.ANTIALIAS)
-            if os.path.exists(tilefilename):
+            if path.exists(tilefilename):
                 im0 = Image.open(tilefilename)
                 im1 = Image.composite(im1, im0, im1) 
             im1.save(tilefilename,self.tiledriver)
@@ -2446,7 +2536,7 @@ class GDAL2Tiles(object):
 # =============================================================================
 
 def worker_metadata(argv):
-    sys.stdout.flush()
+    stdout.flush()
     print("\tStart of metadata worker.")
     gdal2tiles = GDAL2Tiles( argv[1:] )
     gdal2tiles.open_input()
@@ -2454,7 +2544,7 @@ def worker_metadata(argv):
     print("\tEnd of metadata worker.")
 
 def worker_base_tiles(argv, cpu):
-    sys.stdout.flush()
+    stdout.flush()
     print("\tStart of base tile worker: " + str(cpu))
     gdal2tiles = GDAL2Tiles( argv[1:] )
     gdal2tiles.open_input()
@@ -2462,10 +2552,10 @@ def worker_base_tiles(argv, cpu):
     return cpu
 
 def worker_callback(cpu):
-    print "End of worker: " + str(cpu)
+    print("End of worker: " + str(cpu))
 
 def worker_overview_tiles(argv, cpu, tz):
-    sys.stdout.flush()
+    stdout.flush()
     print("\tStart of overview tile worker: " + str(cpu) + ", zoom=" + str(tz))
     gdal2tiles = GDAL2Tiles( argv[1:] )
     gdal2tiles.open_input()
@@ -2477,29 +2567,29 @@ def getZooms(gdal2tiles):
     return gdal2tiles.tminz, gdal2tiles.tmaxz
 
 def main(argv=None):
-    argv = gdal.GeneralCmdLineProcessor( sys.argv )
+    argv = gdal.GeneralCmdLineProcessor(sys_argv)
     if argv:
         gdal2tiles = GDAL2Tiles( argv[1:] ) # handle command line options
 
         print("Begin metadata generation complete.")
-        p = multiprocessing.Process(target=worker_metadata, args=[argv])
+        p = Process(target=worker_metadata, args=[argv])
         p.start()
         p.join()
         print("Metadata generation complete.")
 
-        pool = multiprocessing.Pool()
+        pool = Pool()
         #processed_tiles = 0
         print("Generating Base Tiles:")
         for cpu in range(gdal2tiles.options.processes):
             pool.apply_async(worker_base_tiles, [argv, cpu], callback = worker_callback)
         pool.close()
         # This progress code does not work. The queue deadlocks the pool.join() call.
-        #while len(multiprocessing.active_children()) != 0:
+        #while len(active_children()) != 0:
         #   try:
         #       total = queue.get(timeout=1)
         #       processed_tiles += 1
         #       gdal.TermProgress_nocb(processed_tiles / float(total))
-        #       sys.stdout.flush()
+        #       stdout.flush()
         #   except:
         #       pass
         pool.join()
@@ -2510,16 +2600,16 @@ def main(argv=None):
         print("Generating Overview Tiles:")
         for tz in range(tmaxz-1, tminz-1, -1):
             print("\tGenerating for zoom level: " + str(tz))
-            pool = multiprocessing.Pool()
+            pool = Pool()
             for cpu in range(gdal2tiles.options.processes):
                 pool.apply_async(worker_overview_tiles, [argv, cpu, tz])
             pool.close()
-            #while len(multiprocessing.active_children()) != 0:
+            #while len(active_children()) != 0:
             #   try:
             #       total = queue.get(timeout=1)
             #       processed_tiles += 1
             #       gdal.TermProgress_nocb(processed_tiles / float(total))
-            #       sys.stdout.flush()
+            #       stdout.flush()
             #   except:
             #       pass
             pool.join()
