@@ -385,7 +385,6 @@ class GlobalMercatorProfile(ITileProfile):
             except KeyError:
                 raise
         raise NotImplementedError("No converter for {}".format(type(value)))
->>>>>>> master
 
 class GeodeticProfile(ITileProfile):
 
