@@ -68,9 +68,9 @@ except:
     exit(1)
 
 try:
-  from PIL import Image
-  import numpy
-  import osgeo.gdal_array as gdalarray
+    from PIL import Image
+    import numpy
+    import osgeo.gdal_array as gdalarray
 except:
     # 'antialias' resampling is not available
     pass
@@ -404,20 +404,20 @@ class GlobalMercator(object):
     Such tiles are compatible with Google Maps, Microsoft Virtual Earth, Yahoo Maps,
     UK Ordnance Survey OpenSpace API, ...
     and you can overlay them on top of base maps of those web mapping applications.
-    
+
     Pixel and tile coordinates are in TMS notation (origin [0,0] in bottom-left).
 
     What coordinate conversions do we need for TMS Global Mercator tiles::
 
-         LatLon      <->       Meters      <->     Pixels    <->       Tile     
+         LatLon      <->       Meters      <->     Pixels    <->       Tile
 
      WGS84 coordinates   Spherical Mercator  Pixels in pyramid  Tiles in pyramid
-         lat/lon            XY in metres     XY pixels Z zoom      XYZ from TMS 
-        EPSG:4326           EPSG:900913                                         
-         .----.              ---------               --                TMS      
-        /      \     <->     |       |     <->     /----/    <->      Google    
-        \      /             |       |           /--------/          QuadTree   
-         -----               ---------         /------------/                   
+         lat/lon            XY in metres     XY pixels Z zoom      XYZ from TMS
+        EPSG:4326           EPSG:900913
+         .----.              ---------               --                TMS
+        /      \     <->     |       |     <->     /----/    <->      Google
+        \      /             |       |           /--------/          QuadTree
+         -----               ---------         /------------/
        KML, public         WebMapService         Web Clients      TileMapService
 
     What is the coordinate extent of Earth in EPSG:900913?
@@ -450,7 +450,7 @@ class GlobalMercator(object):
       Well, the web clients like Google Maps are projecting those coordinates by
       Spherical Mercator, so in fact lat/lon coordinates on sphere are treated as if
       the were on the WGS84 ellipsoid.
-     
+
       From MSDN documentation:
       To simplify the calculations, we use the spherical form of projection, not
       the ellipsoidal form. Since the projection is used only for map display,
@@ -524,15 +524,15 @@ class GlobalMercator(object):
         mx = px * res - self.originShift
         my = py * res - self.originShift
         return mx, my
-        
+
     def MetersToPixels(self, mx, my, zoom):
         "Converts EPSG:900913 to pyramid pixel coordinates in given zoom level"
-                
+
         res = self.Resolution( zoom )
         px = (mx + self.originShift) / res
         py = (my + self.originShift) / res
         return px, py
-    
+
     def PixelsToTile(self, px, py):
         "Returns a tile covering region in given pixel coordinates"
 

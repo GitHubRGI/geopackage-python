@@ -40,8 +40,6 @@ from os.path import abspath
 from os.path import join
 from random import randint
 from sqlite3 import Binary
-from sqlite3 import OperationalError
-from sqlite3 import ProgrammingError
 from sys import path
 from sys import version_info
 if version_info[0] == 3:
