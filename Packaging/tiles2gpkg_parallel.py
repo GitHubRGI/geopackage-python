@@ -486,6 +486,8 @@ class ZoomMetadata(object):
 
 
 class Geopackage(object):
+    """Object representing a GeoPackage container."""
+
     def __enter__(self):
         """With-statement caller"""
         return self
@@ -1296,14 +1298,13 @@ if __name__ == '__main__':
                         "are ll, ul, nw, or sw.",
                         choices=["ll", "ul", "sw", "nw"],
                         default="ll")
-    PARSER.add_argument(
-        "-srs",
-        metavar="srs",
-        help="Spatial reference " +
-        "system. Valid options are 3857, 4326, 3395, and 9804.",
-        type=int,
-        choices=[3857, 4326, 3395, 9804],
-        default=3857)
+    PARSER.add_argument("-srs",
+                        metavar="srs",
+                        help="Spatial reference " + "system. Valid options are"
+                        + "3857, 4326, 3395, and 9804.",
+                        type=int,
+                        choices=[3857, 4326, 3395, 9804],
+                        default=3857)
     PARSER.add_argument("-imagery",
                         metavar="imagery",
                         help="Imagery type. Valid options are mixed, " +
