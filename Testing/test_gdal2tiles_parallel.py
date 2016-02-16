@@ -11,11 +11,11 @@ from gdal2tiles_parallel import LonLatPoint
 from gdal2tiles_parallel import ITileProfile
 from gdal2tiles_parallel import GlobalMercatorProfile
 
-class TestITileProfile:
 
+class TestITileProfile:
     def test_lower_left_tile_1(self):
         itp = ITileProfile()
-        tile = Tile(0,0)
+        tile = Tile(0, 0)
         zoom = 1
         result = itp.lower_left_tile(tile, zoom)
         assert result.tx == 0 and result.ty == 0
@@ -41,8 +41,8 @@ class TestITileProfile:
         result = itp.quad_tree(tile, zoom)
         assert result == '2222222200000'
 
-class TestGlobalMercatorProfile:
 
+class TestGlobalMercatorProfile:
     def test_init_1(self):
         gmp = GlobalMercatorProfile()
         assert gmp.tile_size == 256 and \

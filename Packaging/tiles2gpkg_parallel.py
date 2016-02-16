@@ -101,7 +101,7 @@ class Mercator(object):
         x -- tile column (longitude) value for input tile
         y -- tile row (latitude) value for input tile
         """
-        n = 2.0 ** z
+        n = 2.0**z
         lon = x / n * 360.0 - 180.0
         lat_rad = atan(sinh(pi * (2 * y / n - 1)))
         #lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * y / n)))
@@ -154,7 +154,7 @@ class Mercator(object):
         Formats a coordinate to within an acceptable degree of accuracy (2
         decimal places for mercator).
         """
-        return '%.2f' % (int(coord*100)/float(100))
+        return '%.2f' % (int(coord * 100) / float(100))
 
 
 class Geodetic(object):
@@ -162,6 +162,7 @@ class Geodetic(object):
     Geodetic projection class that holds specific calculations and formulas for
     EPSG4326.
     """
+
     def __init__(self, tile_size=256):
         """
         Constructor
@@ -175,7 +176,7 @@ class Geodetic(object):
 
         z -- zoom level of the tile
         """
-        return self.resolution_factor / 2 ** zoom
+        return self.resolution_factor / 2**zoom
 
     def get_coord(self, z, x, y):
         """
@@ -187,7 +188,7 @@ class Geodetic(object):
         y -- tile row
         """
         res = self.resolution_factor / 2**z
-        return x*self.tile_size*res -180, y*self.tile_size*res - 90
+        return x * self.tile_size * res - 180, y * self.tile_size * res - 90
 
     @staticmethod
     def invert_y(z, y):
@@ -207,7 +208,7 @@ class Geodetic(object):
         Formats a coordinate to an acceptable degree of accuracy (7 decimal
         places for Geodetic).
         """
-        return '%.7f' % (int(coord*10000000)/float(10000000))
+        return '%.7f' % (int(coord * 10000000) / float(10000000))
 
 
 class EllipsoidalMercator(Mercator):
@@ -215,6 +216,7 @@ class EllipsoidalMercator(Mercator):
     Ellipsoidal Mercator projection class that holds specific calculations and
     formulas for EPSG3395.
     """
+
     def __init__(self):
         """
         Constructor
@@ -231,8 +233,8 @@ class EllipsoidalMercator(Mercator):
         """
         r = 6378137.0
         e = 0.081819190842621
-        return r * log(tan((pi/2 + lat) / 2) *
-                    ((1 - e * sin(lat))/(1 + e * sin(lat))) ** (e/2))
+        return r * log(tan((pi / 2 + lat) / 2) * ((1 - e * sin(lat)) /
+                                                  (1 + e * sin(lat)))**(e / 2))
 
     @staticmethod
     def tile_to_lat_lon(z, x, y):
@@ -245,10 +247,13 @@ class EllipsoidalMercator(Mercator):
         x -- tile column value for input tile
         y -- tile row value for input tile
         """
-        n = 2.0 ** z
+        n = 2.0**z
         lon = x / n * 360.0 - 180.0
-        my = (y - 2 ** (z - 1)) * 6378137 * pi * 2 / 2 ** z
-        def f(phi): return EllipsoidalMercator.lat_to_northing(phi) - my
+        my = (y - 2**(z - 1)) * 6378137 * pi * 2 / 2**z
+
+        def f(phi):
+            return EllipsoidalMercator.lat_to_northing(phi) - my
+
         lat = 0.0
         oldLat = 1.0
         diff = 1.0
@@ -285,6 +290,7 @@ class ScaledWorldMercator(EllipsoidalMercator):
     Scaled World Mercator projection class that holds specific calculations
     and formulas for EPSG9804/9805 projection proposed by NGA Craig Rollins.
     """
+
     def __init__(self):
         """
         Constructor
@@ -308,8 +314,8 @@ class ScaledWorldMercator(EllipsoidalMercator):
         """
         r = 6378137.0 * 0.857385503731176
         e = 0.081819190842621
-        return r * log(tan((pi/2 + lat) / 2) *
-                    ((1 - e * sin(lat))/(1 + e * sin(lat))) ** (e/2))
+        return r * log(tan((pi / 2 + lat) / 2) * ((1 - e * sin(lat)) /
+                                                  (1 + e * sin(lat)))**(e / 2))
 
     @staticmethod
     def tile_to_lat_lon(z, x, y):
@@ -323,11 +329,14 @@ class ScaledWorldMercator(EllipsoidalMercator):
         x -- tile column value for input tile
         y -- tile row value for input tile
         """
-        n = 2.0 ** z
+        n = 2.0**z
         r = 6378137.0 * 0.857385503731176
         lon = x / n * 360.0 - 180.0
-        my = (y - 2 ** (z - 1)) * r * pi * 2 / 2 ** z
-        def f(phi): return ScaledWorldMercator.lat_to_northing(phi) - my
+        my = (y - 2**(z - 1)) * r * pi * 2 / 2**z
+
+        def f(phi):
+            return ScaledWorldMercator.lat_to_northing(phi) - my
+
         lat = 0.0
         oldLat = 1.0
         diff = 1.0
@@ -362,7 +371,6 @@ class ScaledWorldMercator(EllipsoidalMercator):
 
 
 class ZoomMetadata(object):
-
     """Return an object containing metadata about a given zoom level."""
 
     @property
@@ -478,6 +486,7 @@ class ZoomMetadata(object):
 
 
 class Geopackage(object):
+    """Object representing a GeoPackage container."""
 
     def __enter__(self):
         """With-statement caller"""
@@ -576,6 +585,7 @@ class Geopackage(object):
                 "false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS[
                 "X",EAST],AXIS["Y",NORTH]
             """
+
             cursor.execute("""
                 INSERT INTO gpkg_spatial_ref_sys (
                     srs_id,
@@ -592,6 +602,7 @@ class Geopackage(object):
                 ["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],
                 AUTHORITY["EPSG","4326"]]
             """
+
             cursor.execute("""
                 INSERT INTO gpkg_spatial_ref_sys (
                     srs_id,
@@ -613,6 +624,7 @@ class Geopackage(object):
                 PARAMETER["false_northing",0],AUTHORITY["EPSG","3395"],
                 AXIS["Easting",EAST],AXIS["Northing",NORTH]]
             """
+
             cursor.execute("""
                 INSERT INTO gpkg_spatial_ref_sys (
                     srs_id,
@@ -634,6 +646,7 @@ class Geopackage(object):
                 PARAMETER["false_northing",0],
                 UNIT["metre",1,AUTHORITY["EPSG","9001"]]]
             """
+
             cursor.execute("""
                 INSERT INTO gpkg_spatial_ref_sys (
                     srs_id,
@@ -675,8 +688,8 @@ class Geopackage(object):
                     srs_id)
                 VALUES (?, ?, ?, ?, 0, 0, 0, 0, ?);
             """, ("tiles", "tiles", "Raster Tiles",
-                    "Created by tiles2gpkg_parallel.py, written by S. Lander",
-                    self.__srs))
+                  "Created by tiles2gpkg_parallel.py, written by S. Lander",
+                  self.__srs))
             # Add GP10 to the Sqlite header
             cursor.execute("pragma application_id = 1196437808;")
 
@@ -702,14 +715,17 @@ class Geopackage(object):
                         pixel_y_size)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?);
             """
+
             # iterate through each zoom level object and assign
             # matrix data to table
             for level in metadata:
-                cursor.execute(tile_matrix_stmt, (
-                    "tiles", level.zoom, level.matrix_width, level.matrix_height,
-                    self.__projection.tile_size, self.__projection.tile_size,
-                    self.__projection.pixel_size(level.zoom),
-                    self.__projection.pixel_size(level.zoom)))
+                cursor.execute(
+                    tile_matrix_stmt,
+                    ("tiles", level.zoom, level.matrix_width,
+                     level.matrix_height, self.__projection.tile_size,
+                     self.__projection.tile_size,
+                     self.__projection.pixel_size(level.zoom),
+                     self.__projection.pixel_size(level.zoom)))
             contents_stmt = """
                 UPDATE gpkg_contents SET
                     min_x = ?,
@@ -718,6 +734,7 @@ class Geopackage(object):
                     max_y = ?
                 WHERE table_name = 'tiles';
             """
+
             tile_matrix_set_stmt = """
                 INSERT OR REPLACE INTO gpkg_tile_matrix_set (
                     table_name,
@@ -728,6 +745,7 @@ class Geopackage(object):
                     max_y)
                 VALUES (?, ?, ?, ?, ?, ?);
             """
+
             # get bounding box info based on
             top_level = min(metadata, key=attrgetter('zoom'))
             #top_level.min_x = self.__projection.truncate(top_level.min_x)
@@ -740,9 +758,10 @@ class Geopackage(object):
             top_level.max_y = top_level.max_y
             # write bounds and matrix set info to table
             cursor.execute(contents_stmt, (top_level.min_x, top_level.min_y,
-                top_level.max_x, top_level.max_y))
-            cursor.execute(tile_matrix_set_stmt, ('tiles', self.__srs, top_level.min_x,
-                top_level.min_y, top_level.max_x, top_level.max_y))
+                                           top_level.max_x, top_level.max_y))
+            cursor.execute(tile_matrix_set_stmt,
+                           ('tiles', self.__srs, top_level.min_x,
+                            top_level.min_y, top_level.max_x, top_level.max_y))
 
     def execute(self, statement, inputs=None):
         """Execute a prepared SQL statement on this geopackage database."""
@@ -782,7 +801,7 @@ class Geopackage(object):
         """Resource cleanup on destruction."""
         self.__db_con.close()
 
- 
+
 class TempDB(object):
     """
     Returns a temporary sqlite database to hold tiles for async workers.
@@ -815,6 +834,7 @@ class TempDB(object):
                 tile_data BLOB NOT NULL,
                 UNIQUE (zoom_level, tile_column, tile_row));
             """
+
             cursor.execute(stmt)
             # Enable pragma for fast sqlite creation
             cursor.execute("pragma synchronous = off;")
@@ -905,7 +925,7 @@ def img_has_transparency(img):
         if transparent_pixels == 0:
             # No transparency
             return 0
-        elif 0 < transparent_pixels < (size*size):
+        elif 0 < transparent_pixels < (size * size):
             # Image has some transparency
             return 1
         else:
@@ -956,8 +976,10 @@ def split_all(path):
         head, tail = split(path)
         parts.append(tail)
         path = head
-    file_dict = dict(y=int(parts[0].split('.')[0]), x=int(parts[1]),
-            z=int(parts[2]), path=full_path)
+    file_dict = dict(y=int(parts[0].split('.')[0]),
+                     x=int(parts[1]),
+                     z=int(parts[2]),
+                     path=full_path)
     return file_dict
 
 
@@ -1042,8 +1064,10 @@ def allocate(cores, pool, file_list, extra_args):
         return [pool.apply_async(sqlite_worker, [file_list, extra_args])]
     else:
         files = len(file_list)
-        head = allocate(int(cores/2), pool, file_list[:int(files/2)], extra_args)
-        tail = allocate(int(cores/2), pool, file_list[int(files/2):], extra_args)
+        head = allocate(
+            int(cores / 2), pool, file_list[:int(files / 2)], extra_args)
+        tail = allocate(
+            int(cores / 2), pool, file_list[int(files / 2):], extra_args)
         return head + tail
 
 
@@ -1085,7 +1109,7 @@ def build_lut(file_list, lower_left, srs):
         # To fix, is there a zoom level preceding this one...
         if zoom - 1 in [item for item in zoom_levels if item == (zoom - 1)]:
             # there is, now retrieve it....
-            (prev,) = ([item for item in matrix if item.zoom == (zoom - 1)])
+            (prev, ) = ([item for item in matrix if item.zoom == (zoom - 1)])
             # and fix the grid alignment values
             level.min_tile_row = 2 * prev.min_tile_row
             level.min_tile_col = 2 * prev.min_tile_col
@@ -1096,23 +1120,23 @@ def build_lut(file_list, lower_left, srs):
             level.matrix_height = prev.matrix_height * 2
         else:
             # Get all possible x and y values...
-            x_vals = [int(item['x']) for item in file_list
-                      if int(item['z']) == zoom]
-            y_vals = [int(item['y']) for item in file_list
-                      if int(item['z']) == zoom]
+            x_vals = [int(item['x'])
+                      for item in file_list if int(item['z']) == zoom]
+            y_vals = [int(item['y'])
+                      for item in file_list if int(item['z']) == zoom]
             # then get the min/max values for each.
             level.min_tile_row, level.max_tile_row = min(x_vals), max(x_vals)
             level.min_tile_col, level.max_tile_col = min(y_vals), max(y_vals)
             # Fill in the matrix width and height for this top level
-            x_width_max = max([item['x'] for item in file_list
-                               if item['z'] == level.zoom])
-            x_width_min = min([item['x'] for item in file_list
-                               if item['z'] == level.zoom])
+            x_width_max = max([item[
+                'x'] for item in file_list if item['z'] == level.zoom])
+            x_width_min = min([item[
+                'x'] for item in file_list if item['z'] == level.zoom])
             level.matrix_width = (x_width_max - x_width_min) + 1
-            y_height_max = max([item['y'] for item in file_list
-                               if item['z'] == level.zoom])
-            y_height_min = min([item['y'] for item in file_list
-                               if item['z'] == level.zoom])
+            y_height_max = max([item[
+                'y'] for item in file_list if item['z'] == level.zoom])
+            y_height_min = min([item[
+                'y'] for item in file_list if item['z'] == level.zoom])
             level.matrix_height = (y_height_max - y_height_min) + 1
         if lower_left:
             # TMS-style tile grid, so to calc the top left corner of the grid,
@@ -1165,11 +1189,12 @@ def combine_worker_dbs(out_geopackage):
         itr -= 1
         out_geopackage.assimilate(tdb)
         if tdb == file_list[-1]:
-            stdout.write("\r[X] Progress: [" + "=="*comp + "  "*itr + "]")
+            stdout.write("\r[X] Progress: [" + "==" * comp + "  " * itr + "]")
         else:
-            stdout.write("\r[" + status[counter] + "] Progress: [" + "=="*comp + "  "*itr + "]")
+            stdout.write("\r[" + status[counter] + "] Progress: [" + "==" *
+                         comp + "  " * itr + "]")
         stdout.flush()
-        if counter != len(status)-1:
+        if counter != len(status) - 1:
             counter += 1
         else:
             counter = 0
@@ -1203,9 +1228,12 @@ def main(arg_list):
         cores = cpu_count()
         pool = Pool(cores)
         # Build allocate dictionary
-        extra_args = dict(root_dir=root_dir, tile_info=tile_info,
-                lower_left=lower_left, srs=arg_list.srs,
-                imagery=arg_list.imagery, jpeg_quality=arg_list.q)
+        extra_args = dict(root_dir=root_dir,
+                          tile_info=tile_info,
+                          lower_left=lower_left,
+                          srs=arg_list.srs,
+                          imagery=arg_list.imagery,
+                          jpeg_quality=arg_list.q)
         results = allocate(cores, pool, files, extra_args)
         status = ["|", "/", "-", "\\"]
         counter = 0
@@ -1213,16 +1241,16 @@ def main(arg_list):
             while True:
                 rem = sum([1 for item in results if not item.ready()])
                 if rem == 0:
-                    stdout.write("\r[X] Progress: [" + "=="*(cores-rem) +
-                            "  "*rem + "]")
+                    stdout.write("\r[X] Progress: [" + "==" * (cores - rem) +
+                                 "  " * rem + "]")
                     stdout.flush()
                     print(" All Done!")
                     break
                 else:
                     stdout.write("\r[" + status[counter] + "] Progress: [" +
-                            "=="*(cores-rem) + "  "*rem + "]")
+                                 "==" * (cores - rem) + "  " * rem + "]")
                     stdout.flush()
-                    if counter != len(status)-1:
+                    if counter != len(status) - 1:
                         counter += 1
                     else:
                         counter = 0
@@ -1235,9 +1263,12 @@ def main(arg_list):
             exit(1)
     else:
         # Debugging call to bypass multiprocessing (-T)
-        extra_args = dict(root_dir=root_dir, tile_info=tile_info,
-                lower_left=lower_left, srs=arg_list.srs,
-                imagery=arg_list.imagery, jpeg_quality=arg_list.q)
+        extra_args = dict(root_dir=root_dir,
+                          tile_info=tile_info,
+                          lower_left=lower_left,
+                          srs=arg_list.srs,
+                          imagery=arg_list.imagery,
+                          jpeg_quality=arg_list.q)
         sqlite_worker(files, extra_args)
     # Combine the individual temp databases into the output file
     with Geopackage(arg_list.output_file, arg_list.srs) as gpkg:
@@ -1245,6 +1276,7 @@ def main(arg_list):
         # Using the data in the output file, create the metadata for it
         gpkg.update_metadata(tile_info)
     print("Complete")
+
 
 if __name__ == '__main__':
     print("""
@@ -1254,28 +1286,47 @@ if __name__ == '__main__':
         under certain conditions.
     """)
     PARSER = ArgumentParser(description="Convert TMS folder into geopackage")
-    PARSER.add_argument("source_folder", metavar="source",
-            help="Source folder of TMS files.")
-    PARSER.add_argument("output_file", metavar="dest",
-            help="Destination file path.")
-    PARSER.add_argument("-tileorigin", metavar="tile_origin",
-            help="Tile point of origin location. Valid options " +
-            "are ll, ul, nw, or sw.", choices=["ll", "ul", "sw", "nw"],
-            default="ll")
-    PARSER.add_argument("-srs", metavar="srs", help="Spatial reference " +
-            "system. Valid options are 3857, 4326, 3395, and 9804.",
-            type=int, choices=[3857, 4326, 3395, 9804], default=3857)
-    PARSER.add_argument("-imagery", metavar="imagery",
-            help="Imagery type. Valid options are mixed, " +
-            "jpeg, png, or source.", choices=["mixed", "jpeg", "png", "source"],
-            default="source")
-    PARSER.add_argument("-q", metavar="quality", type=int, default=75,
-            help="Quality for jpeg images, 0-100. Default is 75",
-            choices=list(range(100)))
-    PARSER.add_argument("-a", dest="append", action="store_true",
-            default=False, help="Append tile set to existing geopackage")
-    PARSER.add_argument("-T", dest="threading", action="store_false",
-            default=True, help="Disable multiprocessing.")
+    PARSER.add_argument("source_folder",
+                        metavar="source",
+                        help="Source folder of TMS files.")
+    PARSER.add_argument("output_file",
+                        metavar="dest",
+                        help="Destination file path.")
+    PARSER.add_argument("-tileorigin",
+                        metavar="tile_origin",
+                        help="Tile point of origin location. Valid options " +
+                        "are ll, ul, nw, or sw.",
+                        choices=["ll", "ul", "sw", "nw"],
+                        default="ll")
+    PARSER.add_argument("-srs",
+                        metavar="srs",
+                        help="Spatial reference " + "system. Valid options are"
+                        + "3857, 4326, 3395, and 9804.",
+                        type=int,
+                        choices=[3857, 4326, 3395, 9804],
+                        default=3857)
+    PARSER.add_argument("-imagery",
+                        metavar="imagery",
+                        help="Imagery type. Valid options are mixed, " +
+                        "jpeg, png, or source.",
+                        choices=["mixed", "jpeg", "png", "source"],
+                        default="source")
+    PARSER.add_argument("-q",
+                        metavar="quality",
+                        type=int,
+                        default=75,
+                        help="Quality for jpeg images, 0-100. Default is 75",
+                        choices=list(range(100)))
+    PARSER.add_argument("-a",
+                        dest="append",
+                        action="store_true",
+                        default=False,
+                        help="Append tile set to existing geopackage")
+    PARSER.add_argument("-T",
+                        dest="threading",
+                        action="store_false",
+                        default=True,
+                        help="Disable multiprocessing.")
     ARG_LIST = PARSER.parse_args()
     if not exists(ARG_LIST.source_folder) or exists(ARG_LIST.output_file):
         PARSER.print_usage()
