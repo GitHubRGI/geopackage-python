@@ -385,6 +385,10 @@ class GeodeticProfile(ITileProfile):
         super(ITileProfile, self).__init__(tile_size)
         self.res_fact = 360.0 / self.tile_size
 
+    def resolution(self, zoom):
+        "Resolution (arc/pixel) for given zoom level (measured at Equator)"
+        return self.res_fact / 2**zoom
+
 
 class GlobalMercator(object):
     """
