@@ -1,6 +1,5 @@
-Verify the following before submitting:
+Answer the following when submitting a ticket:
 
-- [ ] Python core, GDAL, and GDAL Python bindings are all the same arch (32bit
-  vs 64bit)
-- [ ] If you are using the Python Imaging Library (PIL), you are using either
-  PIL (old) or Pillow (new)
+* What is your platform (Windows/Linux)
+* What is your architecture? (32 v. 64)
+* What version of GDAL are you using?
