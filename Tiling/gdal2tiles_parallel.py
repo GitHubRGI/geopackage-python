@@ -56,9 +56,10 @@ from tempfile import mktemp
 from collections import namedtuple
 from sys import exit, stdout, argv as sys_argv
 from os import path, unlink, makedirs
-from math import pi, tan, log, exp, atan, ceil, log10
+from math import pi, tan, log, exp, atan, ceil, log10, floor
 from multiprocessing import cpu_count, Pool, Process, Queue
 from optparse import OptionParser, OptionGroup
+from re import sub
 
 try:
     from osgeo import gdal, osr
@@ -911,6 +912,8 @@ class GDAL2Tiles(object):
 
         elif self.options.resampling == 'lanczos':
             self.resampling = gdal.GRA_Lanczos
+            
+        self.error_threshold = 0.125  # error threshold --> use same value as in gdalwarp
 
         # User specified zoom levels
         self.tminz = None
@@ -927,6 +930,18 @@ class GDAL2Tiles(object):
 
         # KML generation
         self.kml = self.options.kml
+        
+        #Output Format
+        if self.options.output_format == 'JPEG':
+            self.tiledriver = 'JPEG'
+            self.tileext = 'jpg'
+
+        elif self.options.output_format == 'PNG':
+            self.tiledriver = 'PNG'
+            self.tileext = 'png'
+
+        else:
+            self.error("Output formats allowed are PNG and JPEG")
 
         # Output the results
 
@@ -988,6 +1003,7 @@ class GDAL2Tiles(object):
             default=cpu_count(),
             help=
             'Number of concurrent processes (defaults to the number of cores in the system)')
+        p.add_option("-f", "--format", dest="output_format", help="Image format for output tiles. Just PNG and JPEG allowed. PNG is selected by default")
         p.add_option("-v",
                      "--verbose",
                      action="store_true",
@@ -1047,6 +1063,7 @@ class GDAL2Tiles(object):
             help=
             "Yahoo Application ID from http://developer.yahoo.com/wsregapp/")
         p.add_option_group(g)
+        
 
         # TODO: MapFile + TileIndexes per zoom level for efficient MapServer WMS
         #g = OptionGroup(p, "WMS MapServer metadata", "Options for generated mapfile and tileindexes for MapServer")
@@ -1211,6 +1228,7 @@ class GDAL2Tiles(object):
                         # Correction of AutoCreateWarpedVRT for NODATA values
                     if self.in_nodata != []:
                         tempfilename = mktemp('-gdal2tiles.vrt')
+                        
                         self.out_ds.GetDriver().CreateCopy(tempfilename,
                                                            self.out_ds)
                         # open as a text file
@@ -1277,11 +1295,15 @@ class GDAL2Tiles(object):
                         s = s.replace("""</WorkingDataType>""",
                                       """</WorkingDataType>
                             <Option name="INIT_DEST">0</Option>""")
+                        s = sub(r"<BlockXSize>\d+</BlockXSize>", "<BlockXSize>{0}</BlockXSize>".format(self.tilesize), s)
+                        s = sub(r"<BlockYSize>\d+</BlockYSize>", "<BlockYSize>{0}</BlockYSize>".format(self.tilesize), s)
+
                         # save the corrected VRT
                         open(tempfilename, "w").write(s)
                         # open by GDAL as self.out_ds
                         self.out_ds = gdal.Open(tempfilename
                                                 )  #, gdal.GA_ReadOnly)
+
                         # delete the temporary file
                         unlink(tempfilename)
 
@@ -1775,6 +1797,11 @@ class GDAL2Tiles(object):
                     self.out_drv.CreateCopy(tilefilename, dstile, strict=0)
 
                 del dstile
+                
+                #Remove JPEG aux.xml sidecars
+                sidecar = tilefilename+".aux.xml"
+                if(path.exists(sidecar)):
+                    unlink(sidecar)
 
                 # Do not create KML, we dont use it and it takes up valuable processing time
                 # Create a KML file for this tile.
@@ -1824,6 +1851,10 @@ class GDAL2Tiles(object):
                           )  #, "( TileMapService: z / x / y )"
 
                 if self.options.resume and path.exists(tilefilename):
+                    #Remove JPEG aux.xml sidecars
+                    sidecar = tilefilename+".aux.xml"
+                    if(path.exists(sidecar)):
+                        unlink(sidecar)
                     if self.options.verbose:
                         print("Tile generation skiped because of --resume")
                     else:
@@ -1834,7 +1865,11 @@ class GDAL2Tiles(object):
                 # Create directories for the tile
                 if not path.exists(path.dirname(tilefilename)):
                     makedirs(path.dirname(tilefilename))
-
+                
+                # TODO: improve that
+                if self.out_drv.ShortName == 'JPEG' and tilebands == 4:
+                    tilebands = 3
+                
                 dsquery = self.mem_drv.Create('', 2 * self.tilesize, 2 *
                                               self.tilesize, tilebands)
                 # TODO: fill the null value
@@ -1895,6 +1930,11 @@ class GDAL2Tiles(object):
                 #   f = open( path.join(self.output, '%d/%d/%d.kml' % (tz, tx, ty)), 'w')
                 #   f.write( self.generate_kml( tx, ty, tz, children ) )
                 #   f.close()
+                
+                #Remove JPEG aux.xml sidecars
+                sidecar = tilefilename+".aux.xml"
+                if(path.exists(sidecar)):
+                    unlink(sidecar)
 
                 if not self.options.verbose:
                     #queue.put(tcount)
@@ -1985,7 +2025,8 @@ class GDAL2Tiles(object):
             dsquery.SetGeoTransform((0.0, tilesize / float(querysize), 0.0,
                                      0.0, 0.0, tilesize / float(querysize)))
             dstile.SetGeoTransform((0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
-
+            
+            
             res = gdal.ReprojectImage(dsquery, dstile, None, None,
                                       self.resampling)
             if res != 0:
